@@ -1,17 +1,22 @@
-from rag_builder import StorachaRAG
+from rag import StorachaRAG
 
-# Test URLs
+# Test with minimal URLs
 urls = [
-    "https://docs.storacha.network/",
-    "https://github.com/storacha-network/storacha",
-    "https://github.com/storacha-network/w3up"
+    "https://storacha.network/",
+    "https://docs.storacha.network/"
 ]
 
-# Build and test
+print("Creating RAG system...")
 rag = StorachaRAG()
-print("Building index...")
-rag.build_index(urls)
 
-print("Testing query...")
-response = rag.query("What is Storacha?")
-print(f"Response: {response}")
+print("Loading documents...")
+rag.load_documents(urls)
+
+if rag.documents:
+    print(f"\nLoaded {len(rag.documents)} documents")
+    
+    print("\nTesting query...")
+    response = rag.query("What is Storacha?")
+    print(f"\nResponse:\n{response}")
+else:
+    print("No documents loaded!")
