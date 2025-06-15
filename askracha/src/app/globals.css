@@ -1,21 +1,16 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+/* Custom CSS */
 @layer base {
   html {
-    @apply h-full;
+    height: 100%;
   }
 
   body {
-    @apply h-full bg-slate-900 text-white antialiased;
+    height: 100%;
+    background: #0f172a;
+    color: white;
     font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
   }
 }
 
