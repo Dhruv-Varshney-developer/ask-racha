@@ -363,7 +363,7 @@ export default function AskRacha() {
                 </h2>
                 <p className="text-xl text-gray-300 mb-8">
                   Your intelligent Storacha documentation assistant powered by
-                  Gemini AI
+                  Gemini.
                 </p>
                 {status && status.documents_loaded > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
