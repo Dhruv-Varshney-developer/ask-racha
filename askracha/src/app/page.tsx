@@ -39,6 +39,7 @@ interface SystemStatus {
     framework: string;
   };
 }
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function AskRacha() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -66,7 +67,7 @@ export default function AskRacha() {
 
   const checkStatus = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/status");
+      const response = await fetch(`${API_URL}/api/status`);
       const data = await response.json();
       setStatus(data);
       setIsInitialized(data.initialized);
@@ -77,7 +78,7 @@ export default function AskRacha() {
 
   const initializeRAG = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/initialize", {
+      const response = await fetch(`${API_URL}/api/initialize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -99,7 +100,7 @@ export default function AskRacha() {
 
     setIsLoading(true);
     try {
-      const response = await fetch("http://localhost:5000/api/load-documents", {
+      const response = await fetch(`${API_URL}/api/load-documents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls: defaultUrls }),
@@ -149,7 +150,7 @@ export default function AskRacha() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/api/query", {
+      const response = await fetch(`${API_URL}/api/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMessage }),
