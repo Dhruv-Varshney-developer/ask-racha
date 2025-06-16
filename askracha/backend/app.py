@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000"])  # Allow Next.js dev server
+CORS(app, origins=["http://localhost:3000","https://ask-racha.vercel.app/"])  # Allow Next.js dev server
 
 # Global RAG instance
 rag = None
