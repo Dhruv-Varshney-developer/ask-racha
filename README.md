@@ -1,6 +1,6 @@
 # Ask Racha
 
-A web application that provides an AI-powered interface to interact with Racha's documentation and GitHub repository. The application uses advanced language models and RAG (Retrieval-Augmented Generation) to provide accurate and contextual responses.
+A web application that provides an AI-powered interface to interact with Storacha's documentation. The application uses advanced language models and RAG (Retrieval-Augmented Generation) to provide accurate and contextual responses.
 
 ## Features
 
