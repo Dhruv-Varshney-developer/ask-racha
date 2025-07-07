@@ -1,53 +1,64 @@
 import os
 import asyncio
 from typing import List, Dict
+from urllib.parse import urljoin, urlparse
 from dotenv import load_dotenv
 
-# Latest Google GenAI package (replaces google-generativeai)
 from google import genai
 
 # Latest LlamaIndex imports
 from llama_index.core import (
-    VectorStoreIndex, 
-    Document, 
+    VectorStoreIndex,
+    Document,
     Settings,
     StorageContext
 )
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
-from llama_index.readers.web import SimpleWebPageReader
+from llama_index.readers.web import SimpleWebPageReader, SitemapReader
 
 import requests
 from bs4 import BeautifulSoup
 
 load_dotenv()
 
+
 class AskRachaRAG:
     def __init__(self):
         # Get Gemini API key
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not self.gemini_api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
-        
+            raise ValueError(
+                "GEMINI_API_KEY not found in environment variables")
+
         # Configure Google GenAI client (new unified SDK)
         self.genai_client = genai.Client(api_key=self.gemini_api_key)
-        
+
         # Configure LlamaIndex with latest Gemini integrations
         Settings.llm = Gemini(
             model="models/gemini-2.0-flash",  # Latest model
             api_key=self.gemini_api_key,
             temperature=0.1
         )
-        
+
         Settings.embed_model = GeminiEmbedding(
             model_name="models/text-embedding-004",  # Latest embedding model
             api_key=self.gemini_api_key
         )
-        
+
         self.index = None
         self.query_engine = None
         self.documents = []
-    
+
+    def extract_content_title(self, content: str) -> str:
+        """Extract meaningful title from document content"""
+        lines = content.split('\n')[:10]
+        for line in lines:
+            line = line.strip()
+            if 10 <= len(line) <= 100 and not line.startswith('http'):
+                return line
+        return "Documentation Page"
+
     def scrape_url_advanced(self, url: str) -> str:
         """Advanced web scraping with BeautifulSoup"""
         try:
@@ -58,20 +69,20 @@ class AskRachaRAG:
                 'Accept-Encoding': 'gzip, deflate',
                 'Connection': 'keep-alive',
             }
-            
+
             response = requests.get(url, headers=headers, timeout=20)
             response.raise_for_status()
-            
+
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Remove unwanted elements
             for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside', 'iframe']):
                 element.decompose()
-            
+
             # Try to find main content areas
             main_selectors = [
                 'main',
-                'article', 
+                'article',
                 '[role="main"]',
                 '.content',
                 '.main-content',
@@ -80,162 +91,290 @@ class AskRachaRAG:
                 '#content',
                 '#main'
             ]
-            
+
             main_content = None
             for selector in main_selectors:
                 main_content = soup.select_one(selector)
                 if main_content:
                     break
-            
+
             # Fallback to body if no main content found
             if not main_content:
                 main_content = soup.body or soup
-            
+
             # Extract text with better formatting
             text = main_content.get_text(separator='\n', strip=True)
-            
+
             # Clean up text
             lines = []
             for line in text.split('\n'):
                 line = line.strip()
                 if len(line) > 3 and not line.startswith('http'):  # Filter out URLs and short lines
                     lines.append(line)
-            
+
             cleaned_text = '\n'.join(lines)
-            
+
             # Limit size but keep reasonable length
             return cleaned_text[:15000]
-            
+
         except Exception as e:
             print(f"Error scraping {url}: {e}")
             return ""
-    
-    async def load_documents_async(self, urls: List[str]) -> Dict:
-        """Load and index documents asynchronously"""
+
+    def discover_documentation_urls(self, base_url: str) -> List[str]:
+        """Discover documentation URLs by analyzing page structure"""
+        discovered_urls = set()
+
         try:
-            documents = []
-            loaded_urls = []
-            failed_urls = []
-            
-            print(f"🔄 Loading {len(urls)} documents...")
-            
-            for url in urls:
-                print(f"📄 Processing: {url}")
+            print(f"🔍 Analyzing page structure for: {base_url}")
+            response = requests.get(base_url, timeout=15)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Find all internal links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                full_url = urljoin(base_url, href)
+
+                # Filter for same domain only
+                if urlparse(full_url).netloc == urlparse(base_url).netloc:
+                    # Look for documentation-related patterns
+                    url_lower = full_url.lower()
+                    if any(pattern in url_lower for pattern in [
+                        'docs', 'guide', 'tutorial', 'help', 'api', 'reference',
+                        'quickstart', 'getting-started', 'concept', 'how-to',
+                        'overview', 'intro', 'setup', 'install', 'config',
+                        'examples', 'learn', 'manual', 'handbook'
+                    ]):
+                        discovered_urls.add(full_url)
+
+            # Limit results to prevent overload
+            urls_list = list(discovered_urls)[:100]
+            print(f"✅ Discovered {len(urls_list)} documentation pages")
+            return urls_list
+
+        except Exception as e:
+            print(f"❌ URL discovery failed: {e}")
+            return [base_url]
+
+    def load_comprehensive_documentation(self, urls: List[str]) -> Dict:
+        """Load comprehensive documentation using multiple discovery methods"""
+        try:
+            all_documents = []
+            all_loaded_urls = []
+            all_failed_urls = []
+
+            print(
+                f"🔄 Loading comprehensive documentation from {len(urls)} sources...")
+
+            for base_url in urls:
+                print(f"📚 Processing documentation source: {base_url}")
+
+                # Method 1: Try structured content discovery
+                structured_urls = self.discover_structured_content(base_url)
+
+                if len(structured_urls) > 1:
+                    print(f"✅ Found {len(structured_urls)} structured pages")
+                    documents, loaded, failed = self.process_url_batch(
+                        structured_urls[:50])
+                    all_documents.extend(documents)
+                    all_loaded_urls.extend(loaded)
+                    all_failed_urls.extend(failed)
+                else:
+                    # Method 2: Manual URL discovery
+                    print("🔍 Using manual discovery method")
+                    discovered_urls = self.discover_documentation_urls(
+                        base_url)
+
+                    if len(discovered_urls) > 1:
+                        documents, loaded, failed = self.process_url_batch(
+                            discovered_urls[:50])
+                        all_documents.extend(documents)
+                        all_loaded_urls.extend(loaded)
+                        all_failed_urls.extend(failed)
+                    else:
+                        # Method 3: Single page fallback
+                        print("📄 Loading single page")
+                        content = self.scrape_url_advanced(base_url)
+                        if content and len(content) > 200:
+                            doc = Document(
+                                text=content,
+                                metadata={
+                                    'source': base_url,
+                                    'title': self.extract_content_title(content),
+                                    'length': len(content),
+                                    'type': 'documentation_page'
+                                }
+                            )
+                            all_documents.append(doc)
+                            all_loaded_urls.append(base_url)
+                        else:
+                            all_failed_urls.append(base_url)
+
+            if not all_documents:
+                return {
+                    'success': False,
+                    'message': 'No documentation content could be loaded',
+                    'loaded_urls': [],
+                    'failed_urls': all_failed_urls
+                }
+
+            # Create vector index with enhanced configuration
+            print(
+                f"🧠 Creating comprehensive knowledge index from {len(all_documents)} documents...")
+            self.index = VectorStoreIndex.from_documents(
+                all_documents,
+                show_progress=True
+            )
+
+            # Create advanced query engine
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=6,  # Retrieve more relevant chunks
+                response_mode="tree_summarize",  # Better synthesis for comprehensive responses
+                verbose=True
+            )
+
+            self.documents = all_documents
+
+            return {
+                'success': True,
+                'message': f'Successfully loaded comprehensive documentation: {len(all_documents)} pages',
+                'loaded_urls': all_loaded_urls,
+                'failed_urls': all_failed_urls,
+                'document_count': len(all_documents),
+                'total_chars': sum(len(doc.text) for doc in all_documents)
+            }
+
+        except Exception as e:
+            print(f"Error in comprehensive documentation loading: {e}")
+            return {
+                'success': False,
+                'message': f'Error loading comprehensive documentation: {str(e)}',
+                'loaded_urls': [],
+                'failed_urls': urls
+            }
+
+    def discover_structured_content(self, base_url: str) -> List[str]:
+        """Discover structured content using standard web discovery methods"""
+        discovered_urls = []
+
+        # Common structured content locations
+        structured_endpoints = [
+            f"{base_url.rstrip('/')}/sitemap.xml",
+            f"{base_url.rstrip('/')}/sitemap_index.xml",
+            f"{base_url.rstrip('/')}/sitemap-index.xml"
+        ]
+
+        for endpoint in structured_endpoints:
+            try:
+                print(f"🔍 Checking structured content at: {endpoint}")
+
+                # Use specialized reader for structured content
+                content_reader = SitemapReader()
+                documents = content_reader.load_data(sitemap_url=endpoint)
+
+                if documents:
+                    urls = []
+                    for doc in documents:
+                        source_url = doc.metadata.get(
+                            'loc') or doc.metadata.get('source', endpoint)
+                        if source_url:
+                            urls.append(source_url)
+
+                    if urls:
+                        print(f"✅ Found {len(urls)} structured content pages")
+                        return urls
+
+            except Exception as e:
+                print(
+                    f"⚠️ Structured content discovery failed for {endpoint}: {str(e)}")
+                continue
+
+        return discovered_urls
+
+    def process_url_batch(self, urls: List[str]) -> tuple:
+        """Process a batch of URLs and return documents, loaded URLs, and failed URLs"""
+        documents = []
+        loaded_urls = []
+        failed_urls = []
+
+        for url in urls:
+            try:
                 content = self.scrape_url_advanced(url)
-                
-                if content and len(content) > 200:  # Minimum content threshold
-                    # Extract title from content (first meaningful line)
-                    title_lines = content.split('\n')[:5]
-                    title = None
-                    for line in title_lines:
-                        if len(line) > 10 and len(line) < 100:
-                            title = line
-                            break
-                    title = title or f"Document from {url}"
-                    
+
+                if content and len(content) > 200:
                     doc = Document(
                         text=content,
                         metadata={
                             'source': url,
-                            'title': title,
+                            'title': self.extract_content_title(content),
                             'length': len(content),
-                            'type': 'web_page'
+                            'type': 'documentation_page'
                         }
                     )
                     documents.append(doc)
                     loaded_urls.append(url)
-                    print(f"✅ Loaded: {len(content)} characters - {title[:50]}...")
+                    print(f"✅ Loaded: {len(content)} chars from {url}")
                 else:
                     failed_urls.append(url)
-                    print(f"❌ Failed to load meaningful content from: {url}")
-            
-            if not documents:
-                return {
-                    'success': False,
-                    'message': 'No documents could be loaded with sufficient content',
-                    'loaded_urls': [],
-                    'failed_urls': failed_urls
-                }
-            
-            # Create vector index with better configuration
-            print("🧠 Creating vector index...")
-            self.index = VectorStoreIndex.from_documents(
-                documents,
-                show_progress=True
-            )
-            
-            # Create query engine with enhanced retrieval
-            self.query_engine = self.index.as_query_engine(
-                similarity_top_k=4,  # Get more relevant chunks
-                response_mode="tree_summarize",  # Better for longer contexts
-                verbose=True
-            )
-            
-            self.documents = documents
-            
-            return {
-                'success': True,
-                'message': f'Successfully loaded {len(documents)} documents',
-                'loaded_urls': loaded_urls,
-                'failed_urls': failed_urls,
-                'document_count': len(documents),
-                'total_chars': sum(len(doc.text) for doc in documents)
-            }
-            
-        except Exception as e:
-            print(f"Error in load_documents_async: {e}")
-            return {
-                'success': False,
-                'message': f'Error loading documents: {str(e)}',
-                'loaded_urls': [],
-                'failed_urls': urls
-            }
-    
+                    print(f"❌ Insufficient content from: {url}")
+
+            except Exception as e:
+                failed_urls.append(url)
+                print(f"❌ Failed to load {url}: {str(e)}")
+
+        return documents, loaded_urls, failed_urls
+
+    async def load_documents_async(self, urls: List[str]) -> Dict:
+        """Load comprehensive documentation asynchronously"""
+        return self.load_comprehensive_documentation(urls)
+
     def load_documents(self, urls: List[str]) -> Dict:
-        """Synchronous wrapper for loading documents"""
+        """Synchronous wrapper for comprehensive documentation loading"""
         return asyncio.run(self.load_documents_async(urls))
-    
+
     def query(self, question: str) -> Dict:
-        """Query the RAG system with enhanced prompting"""
+        """Query the comprehensive knowledge system with enhanced prompting"""
         try:
             if not self.query_engine:
                 return {
                     'success': False,
-                    'answer': 'No documents loaded. Please load documents first.',
+                    'answer': 'No documentation loaded. Please load the knowledge base first.',
                     'sources': []
                 }
-            
+
             print(f"🤔 Processing query: {question}")
-            
-            # Enhanced prompt for better Storacha-specific responses
+
+            # Enhanced prompt for comprehensive responses
             enhanced_question = f"""
-            You are an expert assistant specialized in Storacha documentation.
+            You are an expert assistant with comprehensive knowledge of the loaded documentation.
             
-            Please answer the following question based on the provided Storacha documentation.
-            Be comprehensive, accurate, and helpful. Include specific details from the documentation.
-            If you mention features or concepts, explain them clearly.
-            If the question cannot be fully answered from the documentation, say so explicitly.
+            Please answer the following question based on the provided documentation.
+            Be thorough, accurate, and helpful. Include specific details and examples where available.
+            If you reference features or concepts, explain them clearly for better understanding.
+            If the question cannot be fully answered from the available documentation, clearly indicate this.
             
             User Question: {question}
             
-            Please provide a detailed and helpful response:
+            Please provide a comprehensive and helpful response:
             """
-            
+
             response = self.query_engine.query(enhanced_question)
-            
-            # Extract sources with better metadata
+
+            # Extract sources with enhanced metadata
             sources = []
             if hasattr(response, 'source_nodes'):
                 for node in response.source_nodes:
                     if hasattr(node, 'metadata'):
                         source_info = {
                             'url': node.metadata.get('source', 'Unknown'),
-                            'title': node.metadata.get('title', 'Document'),
+                            'title': node.metadata.get('title', 'Documentation Page'),
                             'score': getattr(node, 'score', 0.0),
                             'snippet': node.text[:150] + "..." if hasattr(node, 'text') else ""
                         }
                         sources.append(source_info)
-            
+
             return {
                 'success': True,
                 'answer': str(response),
@@ -243,20 +382,21 @@ class AskRachaRAG:
                 'question': question,
                 'model_used': 'gemini-2.0-flash'
             }
-            
+
         except Exception as e:
-            print(f"Error in query: {e}")
+            print(f"Error in query processing: {e}")
             return {
                 'success': False,
                 'answer': f'Sorry, I encountered an error processing your question: {str(e)}',
                 'sources': [],
                 'question': question
             }
-    
+
     def get_status(self) -> Dict:
-        """Get current system status with detailed info"""
-        total_chars = sum(len(doc.text) for doc in self.documents) if self.documents else 0
-        
+        """Get current system status with comprehensive information"""
+        total_chars = sum(len(doc.text)
+                          for doc in self.documents) if self.documents else 0
+
         return {
             'documents_loaded': len(self.documents),
             'total_characters': total_chars,
@@ -269,7 +409,7 @@ class AskRachaRAG:
             },
             'document_sources': [doc.metadata.get('source', 'Unknown') for doc in self.documents] if self.documents else []
         }
-    
+
     def test_connection(self) -> Dict:
         """Test the Gemini API connection"""
         try:
@@ -278,7 +418,7 @@ class AskRachaRAG:
                 model='gemini-2.0-flash',
                 contents='Hello! Please respond with "Connection successful"'
             )
-            
+
             return {
                 'success': True,
                 'message': 'Gemini API connection successful',
