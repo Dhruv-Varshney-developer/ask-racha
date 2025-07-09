@@ -1,16 +1,86 @@
 @import "tailwindcss";
 
-/* Custom CSS */
 @layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+
+    /* Custom variables for our theme */
+    --sidebar: 210 40% 98%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+
+    /* Custom variables for dark theme */
+    --sidebar: 224 71.4% 4.1%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 222.2 84% 4.9%;
+    --sidebar-accent: 215 27.9% 16.9%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 27.9% 16.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
   html {
     height: 100%;
   }
 
   body {
     height: 100%;
-    background: #0f172a;
-    color: white;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11", "ss01";
+    font-variation-settings: "opsz" 32;
+  }
+
+  * {
+    border-color: hsl(var(--border));
   }
 }
 
@@ -24,35 +94,17 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: hsl(var(--muted-foreground) / 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
 /* Smooth animations */
 * {
-  transition: color 0.2s ease, background-color 0.2s ease,
-    border-color 0.2s ease, transform 0.2s ease;
-}
-
-/* Backdrop blur support */
-.backdrop-blur-xl {
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-}
-
-.backdrop-blur-lg {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-/* Gradient text */
-.bg-clip-text {
-  -webkit-background-clip: text;
-  background-clip: text;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 /* Custom animations */
@@ -61,6 +113,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -71,28 +124,24 @@
   animation: fadeInUp 0.5s ease-out;
 }
 
-/* Loading animation */
-@keyframes pulse-slow {
-  0%,
-  100% {
-    opacity: 0.4;
+@keyframes slide-in-from-bottom-4 {
+  from {
+    transform: translateY(1rem);
+    opacity: 0;
   }
-  50% {
-    opacity: 0.8;
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 3s ease-in-out infinite;
+.slide-in-from-bottom-4 {
+  animation: slide-in-from-bottom-4 0.5s ease-out;
 }
 
-/* Glowing effect */
-.glow {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-}
-
-.glow:hover {
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+.animate-in {
+  animation-fill-mode: both;
 }
 
 /* Ensure full height */
