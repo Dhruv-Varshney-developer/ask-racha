@@ -1,54 +1,169 @@
 import os
+import logging
 import asyncio
-from typing import List, Dict
+from typing import List, Dict, Optional
 from urllib.parse import urljoin, urlparse
 from dotenv import load_dotenv
-
-from google import genai
-
-# Latest LlamaIndex imports
-from llama_index.core import (
-    VectorStoreIndex,
-    Document,
-    Settings,
-    StorageContext
-)
-from llama_index.llms.gemini import Gemini
-from llama_index.embeddings.gemini import GeminiEmbedding
-from llama_index.readers.web import SimpleWebPageReader, SitemapReader
-
+from pinecone import Pinecone, ServerlessSpec
+from pinecone.exceptions import PineconeApiException
 import requests
 from bs4 import BeautifulSoup
 
+from neo4j import GraphDatabase
+
+from llama_index.core import (
+    VectorStoreIndex,
+    Document,
+    load_index_from_storage,
+    Settings,
+    StorageContext,
+)
+from llama_index.llms.google_genai import GoogleGenAI
+from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.vector_stores.pinecone import PineconeVectorStore
+from llama_index.readers.web import SimpleWebPageReader, SitemapReader
+
 load_dotenv()
 
+URI = os.getenv('NEO4J_URI')
+PASSWORD = os.getenv('NEO4J_PASSWORD')
+USER = os.getenv('NEO4J_USER')
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# -------------------- Knowledge Graph Using Neo4j --------------------
+class Neo4jKnowledgeGraph:
+    def __init__(self, uri: str, user: str, password: str):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+
+    def close(self):
+        self.driver.close()
+
+    def build_from_documents(self, documents: List[Document], extract_entities_fn):
+        """
+        Rebuilds the entire graph in Neo4j. Clears existing nodes.
+        """
+        with self.driver.session() as session:
+            # Delete all existing nodes and relationships
+            session.run("MATCH (n) DETACH DELETE n")
+            # Create nodes and relationships
+            for doc in documents:
+                doc_id = doc.metadata['source']
+                # Create or merge Doc node
+                session.run(
+                    "MERGE (d:Doc {id: $id})", {'id': doc_id}
+                )
+                entities = extract_entities_fn(doc.text)
+                for entity in entities:
+                    # Create or merge Entity node
+                    session.run(
+                        "MERGE (e:Entity {name: $name})", {'name': entity}
+                    )
+                    # Create relationship
+                    session.run(
+                        "MATCH (d:Doc {id: $id}), (e:Entity {name: $name}) \
+                         MERGE (e)-[:REFERS_TO]->(d)",
+                        {'id': doc_id, 'name': entity}
+                    )
+
+    def query_subgraph(self, query_entities: List[str], depth: int = 2) -> List[str]:
+        """
+        Returns document IDs within `depth` hops of listed entities.
+        """
+        if not query_entities:
+            return []
+        cypher = f"""
+        UNWIND $entities AS ent
+        MATCH (e:Entity {{name: ent}})-[:REFERS_TO*1..{depth}]-(d:Doc)
+        RETURN DISTINCT d.id AS id
+        """
+        with self.driver.session() as session:
+            result = session.run(cypher, entities=query_entities)
+            return [record['id'] for record in result]
+
+# -------------------- Main RAG Class --------------------
 class AskRachaRAG:
-    def __init__(self):
-        # Get Gemini API key
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not self.gemini_api_key:
-            raise ValueError(
-                "GEMINI_API_KEY not found in environment variables")
+    def __init__(
+        self,
+        pinecone_api_key: Optional[str] = None,
+        pinecone_env: Optional[str] = None,
+        neo4j_uri: Optional[str] = None,
+        neo4j_user: Optional[str] = None,
+        neo4j_password: Optional[str] = None,
+        index_name: str = 'askrachadb',
+        kg_extract_fn=None
+    ):
+        # Load API keys & connection info
+        self.gemini_api_key = os.getenv('GEMINI_API_KEY')
+        pinecone_api_key = pinecone_api_key or os.getenv('PINECONE_API_KEY')
+        neo4j_uri = neo4j_uri or os.getenv('NEO4J_URI')
+        neo4j_user = neo4j_user or os.getenv('NEO4J_USER')
+        neo4j_password = neo4j_password or os.getenv('NEO4J_PASSWORD')
+        if not all([self.gemini_api_key, pinecone_api_key, neo4j_uri, neo4j_user, neo4j_password]):
+            raise ValueError('Missing GEMINI_API_KEY, PINECONE_API_KEY, or NEO4J_URI/USER/PASSWORD')
 
-        # Configure Google GenAI client (new unified SDK)
-        self.genai_client = genai.Client(api_key=self.gemini_api_key)
+        # Configure LLM + Embeddings
+        Settings.llm = GoogleGenAI(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
+        Settings.embed_model = GoogleGenAIEmbedding(model_name='models/text-embedding-004', api_key=self.gemini_api_key)
 
-        # Configure LlamaIndex with latest Gemini integrations
-        Settings.llm = Gemini(
-            model="models/gemini-2.0-flash",  # Latest model
-            api_key=self.gemini_api_key,
-            temperature=0.1
+        # 1. Initialize Pinecone
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        try:
+            if index_name not in pc.list_indexes():
+                pc.create_index(
+                    name=index_name,
+                    spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                    metric="cosine",
+                    dimension=768,
+                )
+        except PineconeApiException as e:
+            if e.status != 409:
+                raise
+
+        # 2. Rehydrate storage context
+        pinecone_client = pc.Index(index_name)
+        print(f"Pinecone client = {pinecone_client}")
+        self.pinecone_index = pinecone_client
+        pinecone_store = PineconeVectorStore(
+            client=self.pinecone_index,
+            index_name=index_name,
+            text_key='text',
         )
+        print(f"Pinecone store = {pinecone_store}")
+        self.storage_context = StorageContext.from_defaults(vector_store=pinecone_store)
+        print(f"Storage context = {self.storage_context}")
 
-        Settings.embed_model = GeminiEmbedding(
-            model_name="models/text-embedding-004",  # Latest embedding model
-            api_key=self.gemini_api_key
-        )
+        # 3. Attempt to load existing index
+        try:
+            self.index = VectorStoreIndex.from_vector_store(
+                vector_store=pinecone_store,
+            )   
+            print("✅ Index loaded successfully")
+        except Exception:
+            self.index = None
+            print("❌ Index not found")
 
-        self.index = None
-        self.query_engine = None
-        self.documents = []
+        # 4. Wire up query engine only if index is ready
+        if self.index:
+            print("✅ Query engine prepared successfully")
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=10,
+                response_mode="tree_summarize",
+                verbose=False,
+            )
+        else:
+            print("❌ Query engine not prepared")
+            self.query_engine = None
+
+        # 5. Configure chunking for future builds (if you ever need to ingest new docs)
+        Settings.chunk_size = 768
+        Settings.chunk_overlap = 64
+
+        # 6. Knowledge Graph setup
+        self.kg = Neo4jKnowledgeGraph(neo4j_uri, neo4j_user, neo4j_password)
+        self.extract_entities_fn = kg_extract_fn or (lambda text: [])
+        self.documents: List[Document] = []
 
     def extract_content_title(self, content: str) -> str:
         """Extract meaningful title from document content"""
@@ -59,8 +174,9 @@ class AskRachaRAG:
                 return line
         return "Documentation Page"
 
-    def scrape_url_advanced(self, url: str) -> str:
-        """Advanced web scraping with BeautifulSoup"""
+    
+    # -------------------- Web Scraping --------------------
+    def scrape_url(self, url: str) -> str:
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -121,139 +237,6 @@ class AskRachaRAG:
             print(f"Error scraping {url}: {e}")
             return ""
 
-    def discover_documentation_urls(self, base_url: str) -> List[str]:
-        """Discover documentation URLs by analyzing page structure"""
-        discovered_urls = set()
-
-        try:
-            print(f"🔍 Analyzing page structure for: {base_url}")
-            response = requests.get(base_url, timeout=15)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.content, 'html.parser')
-
-            # Find all internal links
-            for link in soup.find_all('a', href=True):
-                href = link['href']
-                full_url = urljoin(base_url, href)
-
-                # Filter for same domain only
-                if urlparse(full_url).netloc == urlparse(base_url).netloc:
-                    # Look for documentation-related patterns
-                    url_lower = full_url.lower()
-                    if any(pattern in url_lower for pattern in [
-                        'docs', 'guide', 'tutorial', 'help', 'api', 'reference',
-                        'quickstart', 'getting-started', 'concept', 'how-to',
-                        'overview', 'intro', 'setup', 'install', 'config',
-                        'examples', 'learn', 'manual', 'handbook'
-                    ]):
-                        discovered_urls.add(full_url)
-
-            # Limit results to prevent overload
-            urls_list = list(discovered_urls)[:100]
-            print(f"✅ Discovered {len(urls_list)} documentation pages")
-            return urls_list
-
-        except Exception as e:
-            print(f"❌ URL discovery failed: {e}")
-            return [base_url]
-
-    def load_comprehensive_documentation(self, urls: List[str]) -> Dict:
-        """Load comprehensive documentation using multiple discovery methods"""
-        try:
-            all_documents = []
-            all_loaded_urls = []
-            all_failed_urls = []
-
-            print(
-                f"🔄 Loading comprehensive documentation from {len(urls)} sources...")
-
-            for base_url in urls:
-                print(f"📚 Processing documentation source: {base_url}")
-
-                # Method 1: Try structured content discovery
-                structured_urls = self.discover_structured_content(base_url)
-
-                if len(structured_urls) > 1:
-                    print(f"✅ Found {len(structured_urls)} structured pages")
-                    documents, loaded, failed = self.process_url_batch(
-                        structured_urls[:50])
-                    all_documents.extend(documents)
-                    all_loaded_urls.extend(loaded)
-                    all_failed_urls.extend(failed)
-                else:
-                    # Method 2: Manual URL discovery
-                    print("🔍 Using manual discovery method")
-                    discovered_urls = self.discover_documentation_urls(
-                        base_url)
-
-                    if len(discovered_urls) > 1:
-                        documents, loaded, failed = self.process_url_batch(
-                            discovered_urls[:50])
-                        all_documents.extend(documents)
-                        all_loaded_urls.extend(loaded)
-                        all_failed_urls.extend(failed)
-                    else:
-                        # Method 3: Single page fallback
-                        print("📄 Loading single page")
-                        content = self.scrape_url_advanced(base_url)
-                        if content and len(content) > 200:
-                            doc = Document(
-                                text=content,
-                                metadata={
-                                    'source': base_url,
-                                    'title': self.extract_content_title(content),
-                                    'length': len(content),
-                                    'type': 'documentation_page'
-                                }
-                            )
-                            all_documents.append(doc)
-                            all_loaded_urls.append(base_url)
-                        else:
-                            all_failed_urls.append(base_url)
-
-            if not all_documents:
-                return {
-                    'success': False,
-                    'message': 'No documentation content could be loaded',
-                    'loaded_urls': [],
-                    'failed_urls': all_failed_urls
-                }
-
-            # Create vector index with enhanced configuration
-            print(
-                f"🧠 Creating comprehensive knowledge index from {len(all_documents)} documents...")
-            self.index = VectorStoreIndex.from_documents(
-                all_documents,
-                show_progress=True
-            )
-
-            # Create advanced query engine
-            self.query_engine = self.index.as_query_engine(
-                similarity_top_k=6,  # Retrieve more relevant chunks
-                response_mode="tree_summarize",  # Better synthesis for comprehensive responses
-                verbose=True
-            )
-
-            self.documents = all_documents
-
-            return {
-                'success': True,
-                'message': f'Successfully loaded comprehensive documentation: {len(all_documents)} pages',
-                'loaded_urls': all_loaded_urls,
-                'failed_urls': all_failed_urls,
-                'document_count': len(all_documents),
-                'total_chars': sum(len(doc.text) for doc in all_documents)
-            }
-
-        except Exception as e:
-            print(f"Error in comprehensive documentation loading: {e}")
-            return {
-                'success': False,
-                'message': f'Error loading comprehensive documentation: {str(e)}',
-                'loaded_urls': [],
-                'failed_urls': urls
-            }
 
     def discover_structured_content(self, base_url: str) -> List[str]:
         """Discover structured content using standard web discovery methods"""
@@ -293,6 +276,43 @@ class AskRachaRAG:
 
         return discovered_urls
 
+    def discover_urls(self, base_url: str) -> List[str]:
+        """Discover documentation URLs by analyzing page structure"""
+        discovered_urls = set()
+
+        try:
+            print(f"🔍 Analyzing page structure for: {base_url}")
+            response = requests.get(base_url, timeout=15)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Find all internal links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                full_url = urljoin(base_url, href)
+
+                # Filter for same domain only
+                if urlparse(full_url).netloc == urlparse(base_url).netloc:
+                    # Look for documentation-related patterns
+                    url_lower = full_url.lower()
+                    if any(pattern in url_lower for pattern in [
+                        'docs', 'guide', 'tutorial', 'help', 'api', 'reference',
+                        'quickstart', 'getting-started', 'concept', 'how-to',
+                        'overview', 'intro', 'setup', 'install', 'config',
+                        'examples', 'learn', 'manual', 'handbook'
+                    ]):
+                        discovered_urls.add(full_url)
+
+            # Limit results to prevent overload
+            urls_list = list(discovered_urls)[:100]
+            print(f"✅ Discovered {len(urls_list)} documentation pages")
+            return urls_list
+
+        except Exception as e:
+            print(f"❌ URL discovery failed: {e}")
+            return [base_url]
+
     def process_url_batch(self, urls: List[str]) -> tuple:
         """Process a batch of URLs and return documents, loaded URLs, and failed URLs"""
         documents = []
@@ -301,7 +321,7 @@ class AskRachaRAG:
 
         for url in urls:
             try:
-                content = self.scrape_url_advanced(url)
+                content = self.scrape_url(url)
 
                 if content and len(content) > 200:
                     doc = Document(
@@ -326,71 +346,158 @@ class AskRachaRAG:
 
         return documents, loaded_urls, failed_urls
 
-    async def load_documents_async(self, urls: List[str]) -> Dict:
-        """Load comprehensive documentation asynchronously"""
-        return self.load_comprehensive_documentation(urls)
-
-    def load_documents(self, urls: List[str]) -> Dict:
-        """Synchronous wrapper for comprehensive documentation loading"""
-        return asyncio.run(self.load_documents_async(urls))
-
-    def query(self, question: str) -> Dict:
-        """Query the comprehensive knowledge system with enhanced prompting"""
+    # -------------------- Build Index --------------------
+    def build_index_from_urls(self, urls: List[str]) -> Dict:
         try:
-            if not self.query_engine:
+            all_documents = []
+            all_loaded_urls = []
+            all_failed_urls = []
+
+            print(
+                f"🔄 Loading comprehensive documentation from {len(urls)} sources...")
+
+            for base_url in urls:
+                print(f"📚 Processing documentation source: {base_url}")
+
+                # Method 1: Try structured content discovery
+                structured_urls = self.discover_structured_content(base_url)
+
+                if len(structured_urls) > 1:
+                    print(f"✅ Found {len(structured_urls)} structured pages")
+                    documents, loaded, failed = self.process_url_batch(
+                        structured_urls[:50])
+                    all_documents.extend(documents)
+                    all_loaded_urls.extend(loaded)
+                    all_failed_urls.extend(failed)
+                else:
+                    # Method 2: Manual URL discovery
+                    print("🔍 Using manual discovery method")
+                    discovered_urls = self.discover_urls(
+                        base_url)
+
+                    if len(discovered_urls) > 1:
+                        documents, loaded, failed = self.process_url_batch(
+                            discovered_urls[:50])
+                        all_documents.extend(documents)
+                        all_loaded_urls.extend(loaded)
+                        all_failed_urls.extend(failed)
+                    else:
+                        # Method 3: Single page fallback
+                        print("📄 Loading single page")
+                        content = self.scrape_url(base_url)
+                        if content and len(content) > 200:
+                            doc = Document(
+                                text=content,
+                                metadata={
+                                    'source': base_url,
+                                    'title': self.extract_content_title(content),
+                                    'length': len(content),
+                                    'type': 'documentation_page'
+                                }
+                            )
+                            all_documents.append(doc)
+                            all_loaded_urls.append(base_url)
+                        else:
+                            all_failed_urls.append(base_url)
+
+            if not all_documents:
                 return {
                     'success': False,
-                    'answer': 'No documentation loaded. Please load the knowledge base first.',
-                    'sources': []
+                    'message': 'No documentation content could be loaded',
+                    'loaded_urls': [],
+                    'failed_urls': all_failed_urls
                 }
+            self.documents = all_documents
 
-            print(f"🤔 Processing query: {question}")
+            # Vector index
+            self.index = VectorStoreIndex.from_documents(
+                all_documents,
+                storage_context=self.storage_context,
+                show_progress=True
+            )
 
-            # Enhanced prompt for comprehensive responses
-            enhanced_question = f"""
-            You are an expert assistant with comprehensive knowledge of the loaded documentation.
-            
-            Please answer the following question based on the provided documentation.
-            Be thorough, accurate, and helpful. Include specific details and examples where available.
-            If you reference features or concepts, explain them clearly for better understanding.
-            If the question cannot be fully answered from the available documentation, clearly indicate this.
-            
-            User Question: {question}
-            
-            Please provide a comprehensive and helpful response:
-            """
+            # Build KG in Neo4j
+            self.kg.build_from_documents(all_documents, self.extract_entities_fn)
 
-            response = self.query_engine.query(enhanced_question)
-
-            # Extract sources with enhanced metadata
-            sources = []
-            if hasattr(response, 'source_nodes'):
-                for node in response.source_nodes:
-                    if hasattr(node, 'metadata'):
-                        source_info = {
-                            'url': node.metadata.get('source', 'Unknown'),
-                            'title': node.metadata.get('title', 'Documentation Page'),
-                            'score': getattr(node, 'score', 0.0),
-                            'snippet': node.text[:150] + "..." if hasattr(node, 'text') else ""
-                        }
-                        sources.append(source_info)
+            # Prepare query engine
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=10,
+                response_mode='tree_summarize',
+                verbose=False
+            )
 
             return {
                 'success': True,
-                'answer': str(response),
-                'sources': sources,
-                'question': question,
-                'model_used': 'gemini-2.0-flash'
+                'message': 'Documentation loaded successfully',
+                'loaded_urls': all_loaded_urls,
+                'failed_urls': all_failed_urls,
+                'loaded': len(all_documents)
             }
-
         except Exception as e:
-            print(f"Error in query processing: {e}")
+            print(f"Error in comprehensive documentation loading: {e}")
             return {
                 'success': False,
-                'answer': f'Sorry, I encountered an error processing your question: {str(e)}',
-                'sources': [],
-                'question': question
+                'message': f'Error loading comprehensive documentation: {str(e)}',
+                'loaded_urls': [],
+                'failed_urls': urls
             }
+
+    # -------------------- Hybrid Retrieval --------------------
+    async def _hybrid_retrieve(self, query: str) -> List[Document]:
+        entities = self.extract_entities_fn(query)
+        seed_sources = self.kg.query_subgraph(entities, depth=2)
+        q_emb = await Settings.embed_model.aget_query_embedding(query)
+        if seed_sources:
+            filter_meta = {'source': {'$in': seed_sources}}
+            res = self.pinecone_index.query(
+                vector=q_emb,
+                top_k=10,
+                filter=filter_meta,
+                include_metadata=True
+            )
+        else:
+            res = self.pinecone_index.query(vector=q_emb, top_k=10, include_metadata=True)
+        docs = [Document(text=m['metadata'].get('text',''), metadata=m['metadata']) for m in res['matches']]
+        return docs
+
+    # -------------------- Query Interface --------------------
+    async def query(self, question: str) -> Dict:
+        if not self.index:
+            return {
+                'success': False, 
+                'answer': 'Index not initialized or query engine not prepared.',
+                'sources': []
+            }
+
+        print(f"🤔 Processing query: {question}")
+
+        # Enhanced prompt for comprehensive responses
+        enhanced_question = f"""
+        You are an expert assistant with comprehensive knowledge of the loaded documentation.
+        
+        Please answer the following question based on the provided documentation.
+        Be thorough, accurate, and helpful. Include specific details and examples where available.
+        If you reference features or concepts, explain them clearly for better understanding.
+        If the question cannot be fully answered from the available documentation, clearly indicate this.
+        
+        User Question: {question}
+        
+        Please provide a comprehensive and helpful response:
+        """
+
+
+        docs = await self._hybrid_retrieve(question)
+        response = self.query_engine.query(enhanced_question)
+        return {
+            'success': True,
+            'answer': str(response),
+            'question': question,
+            'sources': [d.metadata['source'] for d in docs],
+            'model_used': 'gemini-2.0-flash'
+        }
+
+    def query_sync(self, question: str) -> Dict:
+        return asyncio.run(self.query(question))
 
     def get_status(self) -> Dict:
         """Get current system status with comprehensive information"""
@@ -429,3 +536,11 @@ class AskRachaRAG:
                 'success': False,
                 'message': f'Gemini API connection failed: {str(e)}'
             }
+
+# -------------------- Example Usage --------------------
+if __name__ == '__main__':
+    rag = AskRachaRAG(
+        kg_extract_fn=lambda txt: txt.split()[:5]
+    )
+    print(rag.build_index_from_urls(['https://docs.storacha.network']))
+    print(rag.query_sync('How do I get started with storacha?'))
