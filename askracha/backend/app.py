@@ -48,6 +48,12 @@ def initialize_rag():
     try:
         print("🚀 Initializing AskRacha RAG system...")
         rag = AskRachaRAG()
+        # Internally it will hydrate from Pinecone via from_vector_store()
+        if not rag.index:
+            return jsonify({
+                'success': False,
+                'message': 'Index hydration failed no existing vectors found.'
+            }), 500
         
         # Test the connection
         test_result = rag.test_connection()
@@ -75,7 +81,7 @@ def load_documents():
     """Load documents into the RAG system"""
     global rag
     
-    if not rag:
+    if not rag or not rag.index:
         return jsonify({
             'success': False,
             'message': 'RAG system not initialized. Please initialize first.'
@@ -105,7 +111,7 @@ def load_documents():
     
     try:
         print(f"📄 Loading {len(valid_urls)} documents...")
-        result = rag.load_documents(valid_urls)
+        result = rag.build_index_from_urls(valid_urls)
         
         if result['success']:
             print(f"✅ Successfully loaded {result['document_count']} documents")
@@ -125,16 +131,10 @@ def query_documents():
     """Query the RAG system"""
     global rag
     
-    if not rag:
+    if not rag or not rag.query_engine:
         return jsonify({
             'success': False,
-            'message': 'RAG system not initialized. Please initialize first.'
-        }), 400
-    
-    if not rag.query_engine:
-        return jsonify({
-            'success': False,
-            'message': 'No documents loaded. Please load documents first.'
+            'message': 'RAG not ready – initialize and load documents first.'
         }), 400
     
     data = request.get_json()
@@ -148,7 +148,7 @@ def query_documents():
     
     try:
         print(f"🤔 Processing query: {question[:100]}...")
-        result = rag.query(question)
+        result = rag.query_sync(question)
         
         if result['success']:
             print(f"✅ Query processed successfully")

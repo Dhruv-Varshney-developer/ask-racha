@@ -499,22 +499,60 @@ class AskRachaRAG:
     def query_sync(self, question: str) -> Dict:
         return asyncio.run(self.query(question))
 
+    # def get_status(self) -> Dict:
+    #     """Get current system status with comprehensive information"""
+    #     total_chars = sum(len(doc.text)
+    #                       for doc in self.documents) if self.documents else 0
+
+    #     return {
+    #         'documents_loaded': len(self.documents),
+    #         'total_characters': total_chars,
+    #         'index_ready': self.index is not None,
+    #         'query_engine_ready': self.query_engine is not None,
+    #         'model_info': {
+    #             'llm': 'Gemini 2.0 Flash',
+    #             'embeddings': 'Text Embedding 004',
+    #             'framework': 'LlamaIndex 0.12.x'
+    #         },
+    #         'document_sources': [doc.metadata.get('source', 'Unknown') for doc in self.documents] if self.documents else []
+    #     }
+
     def get_status(self) -> Dict:
         """Get current system status with comprehensive information"""
-        total_chars = sum(len(doc.text)
-                          for doc in self.documents) if self.documents else 0
+        # 1. Basic in-memory document stats
+        total_chars = sum(len(doc.text) for doc in self.documents) if self.documents else 0
+        docs_loaded = len(self.documents)
 
+        # 2. Vector DB stats (only if index is initialized)
+        vec_stats = {}
+        if hasattr(self, 'pinecone_index') and self.index:
+            try:
+                stats = self.pinecone_index.describe_index_stats()
+                # Pinecone returns a dict with 'total_vector_count' and namespace breakdown
+                total_vectors = stats.get('total_vector_count', None)
+                namespace_stats = stats.get('namespaces', {})
+                vec_stats = {
+                    'total_vectors': total_vectors,
+                    'namespaces': namespace_stats
+                }
+            except Exception as e:
+                vec_stats = {'error': f'Failed to fetch vector DB stats: {e}'}
+
+        # 3. Assembly of full status payload
         return {
-            'documents_loaded': len(self.documents),
+            'documents_loaded': docs_loaded,
             'total_characters': total_chars,
             'index_ready': self.index is not None,
             'query_engine_ready': self.query_engine is not None,
+            'vector_db': vec_stats,
             'model_info': {
                 'llm': 'Gemini 2.0 Flash',
                 'embeddings': 'Text Embedding 004',
                 'framework': 'LlamaIndex 0.12.x'
             },
-            'document_sources': [doc.metadata.get('source', 'Unknown') for doc in self.documents] if self.documents else []
+            'document_sources': [
+                doc.metadata.get('source', 'Unknown') for doc in self.documents
+            ] if self.documents else []
         }
 
     def test_connection(self) -> Dict:
@@ -540,7 +578,8 @@ class AskRachaRAG:
 # -------------------- Example Usage --------------------
 if __name__ == '__main__':
     rag = AskRachaRAG(
-        kg_extract_fn=lambda txt: txt.split()[:5]
+        kg_extract_fn=lambda txt: txt.split()[:100]
     )
-    print(rag.build_index_from_urls(['https://docs.storacha.network']))
-    print(rag.query_sync('How do I get started with storacha?'))
+    # print(rag.build_index_from_urls(['https://docs.storacha.network']))
+    # print(rag.query_sync('How do I get started with storacha?'))
+    print(rag.get_status())
