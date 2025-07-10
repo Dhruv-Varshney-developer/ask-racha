@@ -252,8 +252,6 @@ class AskRachaRAG:
 
         for endpoint in structured_endpoints:
             try:
-                print(f"🔍 Checking structured content at: {endpoint}")
-
                 # Use specialized reader for structured content
                 content_reader = SitemapReader()
                 documents = content_reader.load_data(sitemap_url=endpoint)
@@ -282,7 +280,6 @@ class AskRachaRAG:
         discovered_urls = set()
 
         try:
-            print(f"🔍 Analyzing page structure for: {base_url}")
             response = requests.get(base_url, timeout=15)
             response.raise_for_status()
 
