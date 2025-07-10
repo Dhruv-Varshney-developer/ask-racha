@@ -1,7 +1,9 @@
 google-genai
 llama-index
-llama-index-llms-gemini
-llama-index-embeddings-gemini
+# llama-index-llms-gemini
+# llama-index-embeddings-gemini
+llama-index-llms-google-genai
+llama-index-embeddings-google-genai
 llama-index-readers-web
 flask
 flask-cors
@@ -9,3 +11,6 @@ python-dotenv
 requests
 beautifulsoup4
 lxml
+neo4j
+pinecone
+llama-index-vector-stores-pinecone
