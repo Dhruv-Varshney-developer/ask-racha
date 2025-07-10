@@ -156,7 +156,6 @@ class AskRachaRAG:
                 verbose=False,
             )
         else:
-            print("❌ Query engine not prepared")
             self.query_engine = None
 
         # 5. Configure chunking for future builds (if you ever need to ingest new docs)
@@ -237,7 +236,6 @@ class AskRachaRAG:
             return cleaned_text[:15000]
 
         except Exception as e:
-            print(f"Error scraping {url}: {e}")
             return ""
 
 
@@ -309,7 +307,6 @@ class AskRachaRAG:
 
             # Limit results to prevent overload
             urls_list = list(discovered_urls)[:100]
-            print(f"✅ Discovered {len(urls_list)} documentation pages")
             return urls_list
 
         except Exception as e:
@@ -509,9 +506,6 @@ class AskRachaRAG:
                 'score': score,
             })
         response = self.query_engine.query(enhanced_question)
-        print(f"Response: {response}")
-
-        print(f"Sources: {sources}")
         return {
             'success': True,
             'answer': str(response),
