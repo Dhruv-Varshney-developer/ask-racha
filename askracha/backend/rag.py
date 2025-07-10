@@ -107,6 +107,9 @@ class AskRachaRAG:
         Settings.llm = GoogleGenAI(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
         Settings.embed_model = GoogleGenAIEmbedding(model_name='models/text-embedding-004', api_key=self.gemini_api_key)
 
+
+        self.genai_client = GoogleGenAI(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
+
         # 1. Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
         try:
@@ -485,89 +488,107 @@ class AskRachaRAG:
         Please provide a comprehensive and helpful response:
         """
 
+        # 1) Embed + retrieve raw Pinecone matches so we can grab score, metadata, etc.
+        q_emb = await Settings.embed_model.aget_query_embedding(question)
+        pinecone_resp = self.pinecone_index.query(
+            vector=q_emb,
+            top_k=10,
+            include_metadata=True
+        )
 
-        docs = await self._hybrid_retrieve(question)
+        # 2) Turn those into {url, title, score} dicts
+        sources = []
+        for match in pinecone_resp['matches']:
+            md    = match['metadata']
+            url   = md.get('source', '')
+            title = md.get('title', url)
+            score = float(match.get('score', 0.0))
+            sources.append({
+                'url':   url,
+                'title': title,
+                'score': score,
+            })
         response = self.query_engine.query(enhanced_question)
+        print(f"Response: {response}")
+
+        print(f"Sources: {sources}")
         return {
             'success': True,
             'answer': str(response),
             'question': question,
-            'sources': [d.metadata['source'] for d in docs],
+            'sources': sources,
             'model_used': 'gemini-2.0-flash'
         }
 
     def query_sync(self, question: str) -> Dict:
         return asyncio.run(self.query(question))
 
-    # def get_status(self) -> Dict:
-    #     """Get current system status with comprehensive information"""
-    #     total_chars = sum(len(doc.text)
-    #                       for doc in self.documents) if self.documents else 0
-
-    #     return {
-    #         'documents_loaded': len(self.documents),
-    #         'total_characters': total_chars,
-    #         'index_ready': self.index is not None,
-    #         'query_engine_ready': self.query_engine is not None,
-    #         'model_info': {
-    #             'llm': 'Gemini 2.0 Flash',
-    #             'embeddings': 'Text Embedding 004',
-    #             'framework': 'LlamaIndex 0.12.x'
-    #         },
-    #         'document_sources': [doc.metadata.get('source', 'Unknown') for doc in self.documents] if self.documents else []
-    #     }
 
     def get_status(self) -> Dict:
-        """Get current system status with comprehensive information"""
-        # 1. Basic in-memory document stats
-        total_chars = sum(len(doc.text) for doc in self.documents) if self.documents else 0
-        docs_loaded = len(self.documents)
+        """
+        Get current system status with comprehensive information.
+        All fields are guaranteed to be JSON‐serializable primitives.
+        """
+        try:
+            # 1. In-memory document metrics
+            docs_loaded     = len(self.documents)
+            total_characters = sum(len(doc.text) for doc in self.documents)
 
-        # 2. Vector DB stats (only if index is initialized)
-        vec_stats = {}
-        if hasattr(self, 'pinecone_index') and self.index:
-            try:
-                stats = self.pinecone_index.describe_index_stats()
-                # Pinecone returns a dict with 'total_vector_count' and namespace breakdown
-                total_vectors = stats.get('total_vector_count', None)
-                namespace_stats = stats.get('namespaces', {})
-                vec_stats = {
-                    'total_vectors': total_vectors,
-                    'namespaces': namespace_stats
+            # 2. Vector DB metrics (if index is ready)
+            vec_stats = {}
+            if getattr(self, 'pinecone_index', None) and self.index:
+                describe = getattr(self.pinecone_index, 'describe_index_stats', None)
+                if callable(describe):
+                    raw = describe()
+                    # Convert NamespaceSummary objects into plain dicts
+                    namespaces = {}
+                    for name, summary in raw.get('namespaces', {}).items():
+                        namespaces[name] = {
+                            'vector_count': getattr(summary, 'vector_count', None),
+                            'segment_count': getattr(summary, 'segment_count', None)
+                        }
+                    vec_stats = {
+                        'total_vectors': raw.get('total_vector_count', 0),
+                        'namespaces': namespaces
+                    }
+
+            # 3. Build the clean payload
+            return {
+                'success': True,
+                'initialized': True,
+                'message': 'System status retrieved successfully',
+                'documents_loaded': docs_loaded,
+                'total_characters': total_characters,
+                'index_ready': bool(self.index),
+                'query_engine_ready': bool(self.query_engine),
+                'vector_db': vec_stats,
+                'vector_count': vec_stats.get('total_vectors', 0),
+                'model_info': {
+                    'llm': 'Gemini 2.0 Flash',
+                    'embeddings': 'Text Embedding 004',
+                    'framework': 'LlamaIndex 0.12.x'
                 }
-            except Exception as e:
-                vec_stats = {'error': f'Failed to fetch vector DB stats: {e}'}
-
-        # 3. Assembly of full status payload
-        return {
-            'documents_loaded': docs_loaded,
-            'total_characters': total_chars,
-            'index_ready': self.index is not None,
-            'query_engine_ready': self.query_engine is not None,
-            'vector_db': vec_stats,
-            'model_info': {
-                'llm': 'Gemini 2.0 Flash',
-                'embeddings': 'Text Embedding 004',
-                'framework': 'LlamaIndex 0.12.x'
-            },
-            'document_sources': [
-                doc.metadata.get('source', 'Unknown') for doc in self.documents
-            ] if self.documents else []
-        }
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'initialized': False,
+                'message': f'Status connection failed: {e}'
+            }
 
     def test_connection(self) -> Dict:
         """Test the Gemini API connection"""
         try:
-            # Simple test query using the unified SDK
-            response = self.genai_client.models.generate_content(
-                model='gemini-2.0-flash',
-                contents='Hello! Please respond with "Connection successful"'
+            # Use the .complete() method for a simple request
+            response = self.genai_client.complete(
+                'Hello! Please respond with "Connection successful"'
             )
 
+            # The response object itself is a string-like object
             return {
                 'success': True,
                 'message': 'Gemini API connection successful',
-                'response': response.text
+                'response': str(response)
             }
         except Exception as e:
             return {
@@ -583,3 +604,4 @@ if __name__ == '__main__':
     # print(rag.build_index_from_urls(['https://docs.storacha.network']))
     # print(rag.query_sync('How do I get started with storacha?'))
     print(rag.get_status())
+    print(rag.test_connection())

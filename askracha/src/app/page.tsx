@@ -39,7 +39,7 @@ interface SystemStatus {
     framework: string;
   };
 }
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AskRacha() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -61,8 +61,12 @@ export default function AskRacha() {
   }, [messages]);
 
   useEffect(() => {
-    checkStatus();
-    initializeRAG();
+    // Simplified initialization process
+    const initializeAndCheckStatus = async () => {
+      await initializeRAG();
+      await checkStatus();
+    };
+    initializeAndCheckStatus();
   }, []);
 
   const checkStatus = async () => {
@@ -70,60 +74,42 @@ export default function AskRacha() {
       const response = await fetch(`${API_URL}/api/status`);
       const data = await response.json();
       setStatus(data);
-      setIsInitialized(data.initialized);
+      // The `isInitialized` state is now primarily driven by the backend status
+      if (data.initialized || data.documents_loaded > 0 || data.vector_count > 0) {
+        setIsInitialized(true);
+        if (messages.length === 0) {
+            addMessage(
+                "assistant",
+                "✨ I'm ready to help you with Storacha questions."
+            );
+        }
+      }
     } catch (error) {
       console.error("Error checking status:", error);
     }
   };
 
   const initializeRAG = async () => {
+    // This function now just ensures the backend is ready
     try {
       const response = await fetch(`${API_URL}/api/initialize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       const data = await response.json();
-      if (data.success) {
-        setIsInitialized(true);
-        setStatus(data.status);
+      if (!data.success) {
+          addMessage("assistant", `❌ Failed to initialize: ${data.message}`);
       }
     } catch (error) {
       console.error("Error initializing RAG:", error);
+       addMessage(
+         "assistant",
+         "❌ Error connecting to the server. Please check if the backend is running."
+       );
     }
   };
 
-  const loadDefaultDocuments = async () => {
-    const defaultUrls = [
-      "https://docs.storacha.network/quickstart/",
-      "https://docs.storacha.network/concepts/ucans-and-storacha/",
-    ];
-
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/api/load-documents`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: defaultUrls }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        await checkStatus();
-        addMessage(
-          "assistant",
-          `✨ Successfully loaded ${data.document_count} documents! I'm ready to help you with Storacha questions.`
-        );
-      } else {
-        addMessage("assistant", `❌ Failed to load documents: ${data.message}`);
-      }
-    } catch (error) {
-      addMessage(
-        "assistant",
-        "❌ Error loading documents. Please check if the backend server is running."
-      );
-    }
-    setIsLoading(false);
-  };
+  // REMOVED the `loadDefaultDocuments` function as it's no longer needed.
 
   const addMessage = (
     type: "user" | "assistant",
@@ -270,29 +256,8 @@ export default function AskRacha() {
               </div>
             </div>
 
-            {/* Load Documents Button */}
-            {isInitialized && (!status || status.documents_loaded === 0) && (
-              <button
-                onClick={loadDefaultDocuments}
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-medium py-4 px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl disabled:cursor-not-allowed transform hover:scale-105 disabled:transform-none"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Loading Knowledge Base...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="h-5 w-5" />
-                    Load Storacha Docs
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* Quick Actions */}
-            {status && status.documents_loaded > 0 && (
+            {/* Quick Actions - now shown if documents are loaded */}
+            {isInitialized && (
               <div className="bg-white/5 backdrop-blur-lg rounded-xl p-4 border border-white/10">
                 <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-purple-400" />
@@ -366,7 +331,7 @@ export default function AskRacha() {
                   Your intelligent Storacha documentation assistant powered by
                   Gemini.
                 </p>
-                {status && status.documents_loaded > 0 ? (
+                {isInitialized && status && status.documents_loaded > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {suggestions.map((suggestion, idx) => (
                       <button
@@ -379,9 +344,10 @@ export default function AskRacha() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-400">
-                    Please load the documents to get started
-                  </p>
+                   <div className="flex items-center justify-center text-gray-400">
+                     <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                     Initializing and loading knowledge base...
+                   </div>
                 )}
               </div>
             </div>
@@ -474,11 +440,12 @@ export default function AskRacha() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={
-                  status?.documents_loaded
+                  // MODIFIED placeholder text
+                  isInitialized
                     ? "Ask me anything about Storacha..."
-                    : "Please load documents first..."
+                    : "Initializing system..."
                 }
-                disabled={!status?.documents_loaded || isLoading}
+                disabled={!isInitialized || isLoading}
                 className="w-full px-6 py-4 bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-white/5 disabled:cursor-not-allowed text-white placeholder-gray-400 transition-all duration-200"
                 rows={1}
                 style={{ minHeight: "56px", maxHeight: "120px" }}
@@ -486,7 +453,7 @@ export default function AskRacha() {
             </div>
             <button
               type="submit"
-              disabled={!input.trim() || !status?.documents_loaded || isLoading}
+              disabled={!input.trim() || !isInitialized || isLoading}
               className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-600 text-white p-4 rounded-2xl transition-all duration-200 flex items-center justify-center shadow-lg hover:shadow-xl disabled:cursor-not-allowed transform hover:scale-105 disabled:transform-none"
             >
               <Send className="h-5 w-5" />
