@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "./globals.css";
+import "./globals.css"; // Your merged CSS file
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,8 +21,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} antialiased`}>{children}</body>
+    <html lang="en" className={inter.className} suppressHydrationWarning>
+      <body>
+        {/* ThemeProvider from next-themes.
+            - attribute="class" will add a class (e.g., "dark", "light", "storacha") to the <html> tag.
+            - defaultTheme="dark" sets the initial theme.
+            - enableSystem allows the system's preferred theme to be used initially.
+            - themes prop is crucial: it lists all available themes, including your custom 'storacha' theme.
+        */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          themes={["light", "dark", "storacha"]}
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

@@ -1,16 +1,135 @@
 @import "tailwindcss";
 
-/* Custom CSS */
 @layer base {
+  :root {
+    /* Light Theme Variables */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+
+    /* Custom variables for sidebar in light theme */
+    --sidebar: 210 40% 98%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
+  }
+
+  .dark {
+    /* Dark Theme Variables */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 94.1%;
+
+    /* Custom variables for sidebar in dark theme */
+    --sidebar: 224 71.4% 4.1%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 222.2 84% 4.9%;
+    --sidebar-accent: 215 27.9% 16.9%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 215 27.9% 16.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .storacha {
+    /* Storacha Theme Variables (deep purple background) */
+    /* These are now used for component colors, not the main background gradient */
+    --background: 218 50% 11%; /* Approximates slate-900 for base background */
+    --foreground: 0 0% 100%; /* white */
+    --card: 260 40% 15%; /* Slightly lighter purple for cards */
+    --card-foreground: 0 0% 100%;
+    --popover: var(--background);
+    --popover-foreground: var(--foreground);
+    --primary: 273 67% 32%; /* Approximates purple-900 for primary elements */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 50% 11%; /* Approximates slate-900 for secondary elements */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 260 20% 25%; /* Even lighter purple for muted elements */
+    --muted-foreground: 260 10% 70%; /* Light gray-purple for muted text */
+    --accent: 260 30% 20%; /* Same as secondary for accent */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100%; /* Changed to white for storacha theme */
+    --input: 260 20% 30%;
+    --ring: 273 67% 32%; /* Same as primary for ring */
+    --radius: 0.75rem;
+
+    /* Custom variables for sidebar in storacha theme */
+    --sidebar: 260 50% 8%; /* Solid fallback for sidebar if gradient not applied */
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border); /* This will now be white */
+    --sidebar-ring: var(--ring);
+
+    /* New variables for the main background gradient */
+    --gradient-start: 218 50% 11%; /* HSL for slate-900 */
+    --gradient-via: 273 67% 32%; /* HSL for purple-900 */
+    --gradient-end: 218 50% 11%; /* HSL for slate-900 */
+
+    /* New variables for the sidebar gradient in storacha theme */
+    --sidebar-gradient-start: 218 50% 8%; /* Darker slate-900 */
+    --sidebar-gradient-via: 273 67% 25%; /* Darker purple-900 */
+    --sidebar-gradient-end: 218 50% 8%; /* Darker slate-900 */
+  }
+
   html {
     height: 100%;
   }
 
   body {
     height: 100%;
-    background: #0f172a;
-    color: white;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    /* Use CSS variables for background and color to support themes */
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "cv11", "ss01";
+    font-variation-settings: "opsz" 32;
+  }
+
+  /* Apply border color from theme variables */
+  * {
+    border-color: hsl(var(--border));
   }
 }
 
@@ -24,15 +143,16 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  /* Use muted-foreground variable for scrollbar thumb */
+  background: hsl(var(--muted-foreground) / 0.3);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: hsl(var(--muted-foreground) / 0.5);
 }
 
-/* Smooth animations */
+/* Smooth animations for all elements */
 * {
   transition: color 0.2s ease, background-color 0.2s ease,
     border-color 0.2s ease, transform 0.2s ease;
@@ -95,7 +215,46 @@
   box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
 }
 
-/* Ensure full height */
+/* New animation from your second snippet */
+@keyframes slide-in-from-bottom-4 {
+  from {
+    transform: translateY(1rem);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.slide-in-from-bottom-4 {
+  animation: slide-in-from-bottom-4 0.5s ease-out;
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+/* Ensure full height for Next.js root element */
 #__next {
   height: 100%;
+}
+
+/* Custom class for the Storacha main background gradient */
+.bg-storacha-gradient {
+  background-image: linear-gradient(
+    to bottom right,
+    hsl(var(--gradient-start)),
+    hsl(var(--gradient-via)),
+    hsl(var(--gradient-end))
+  );
+}
+
+/* Custom class for the Storacha sidebar gradient */
+.bg-sidebar-storacha-gradient {
+  background-image: linear-gradient(
+    to bottom right,
+    hsl(var(--sidebar-gradient-start)),
+    hsl(var(--sidebar-gradient-via)),
+    hsl(var(--sidebar-gradient-end))
+  ) !important; /* Added !important to ensure precedence */
 }
