@@ -20,6 +20,8 @@ from llama_index.readers.web import SimpleWebPageReader, SitemapReader
 import requests
 from bs4 import BeautifulSoup
 
+from cache import CacheDB
+
 load_dotenv()
 
 
@@ -49,6 +51,12 @@ class AskRachaRAG:
         self.index = None
         self.query_engine = None
         self.documents = []
+        self.cache_documents = os.getenv("CACHE_DOCUMENTS", "false").lower() in ("true", "1", "yes")
+
+        if self.cache_documents:
+            print("🔍 Using cache")
+            self.cache_db = CacheDB()
+
 
     def extract_content_title(self, content: str) -> str:
         """Extract meaningful title from document content"""
@@ -62,6 +70,13 @@ class AskRachaRAG:
     def scrape_url_advanced(self, url: str) -> str:
         """Advanced web scraping with BeautifulSoup"""
         try:
+            # use cached content if it exists
+            if self.cache_db:
+                cached = self.cache_db.get_content(url)
+                if cached:
+                    print(f"using cached content for {url}")
+                    return cached
+
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -114,6 +129,10 @@ class AskRachaRAG:
 
             cleaned_text = '\n'.join(lines)
 
+            # add to cache if initialized
+            if self.cache_db:
+                self.cache_db.add(url, cleaned_text)
+
             # Limit size but keep reasonable length
             return cleaned_text[:15000]
 
@@ -157,10 +176,38 @@ class AskRachaRAG:
         except Exception as e:
             print(f"❌ URL discovery failed: {e}")
             return [base_url]
+        
+    def load_documents_from_cache(self):
+        if self.cache_db:
+            docs = self.cache_db.load_documents()
+            if docs:
+                self.index = VectorStoreIndex.from_documents(docs, show_progress=True)
+                self.query_engine = self.index.as_query_engine(
+                    similarity_top_k=6,
+                    response_mode="tree_summarize",
+                    verbose=True
+                )
+                self.documents = docs
+                print(f"loaded {len(docs)} documents from cache")
+
+                # Track cached URLs to avoid re-scraping
+                self.cached_urls = set()
+                for doc in docs:
+                    source_url = doc.metadata.get('source')
+                    if source_url:
+                        self.cached_urls.add(source_url)
+            else:
+                self.cached_urls = set()
+        else:
+            self.cached_urls = set()
+
 
     def load_comprehensive_documentation(self, urls: List[str]) -> Dict:
         """Load comprehensive documentation using multiple discovery methods"""
         try:
+            # first load all cached documents
+            self.load_documents_from_cache()
+            
             all_documents = []
             all_loaded_urls = []
             all_failed_urls = []
@@ -235,7 +282,7 @@ class AskRachaRAG:
                 verbose=True
             )
 
-            self.documents = all_documents
+            self.documents = (self.documents or []) + all_documents
 
             return {
                 'success': True,
@@ -300,21 +347,31 @@ class AskRachaRAG:
         failed_urls = []
 
         for url in urls:
+            # Skip if URL is already cached and loaded
+            if hasattr(self, "cached_urls") and url in self.cached_urls:
+                print(f"⚡ Skipping already cached URL: {url}")
+                continue
+
             try:
                 content = self.scrape_url_advanced(url)
 
                 if content and len(content) > 200:
+                    title = self.extract_content_title(content)
                     doc = Document(
                         text=content,
                         metadata={
                             'source': url,
-                            'title': self.extract_content_title(content),
+                            'title': title,
                             'length': len(content),
                             'type': 'documentation_page'
                         }
                     )
                     documents.append(doc)
                     loaded_urls.append(url)
+
+                    if self.cache_db:
+                        self.cache_db.save_document(url, content, title, len(content))
+
                     print(f"✅ Loaded: {len(content)} chars from {url}")
                 else:
                     failed_urls.append(url)
