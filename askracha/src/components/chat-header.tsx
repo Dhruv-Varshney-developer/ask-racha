@@ -16,7 +16,7 @@ export function ChatHeader({
   isInitialized,
 }: ChatHeaderProps) {
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="border-b  bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center justify-between px-4 lg:px-6 py-4">
         {/* Left side */}
         <div className="flex items-center gap-4">
@@ -47,8 +47,8 @@ export function ChatHeader({
           {/* Status indicator */}
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground border">
             {isInitialized &&
-            status?.documents_loaded &&
-            status.documents_loaded > 0 ? (
+              status?.documents_loaded &&
+              status.documents_loaded > 0 ? (
               <>
                 <CheckCircle className="w-4 h-4 text-green-600" />{" "}
                 {/* Specific status color */}

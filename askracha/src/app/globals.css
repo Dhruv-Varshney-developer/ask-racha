@@ -69,48 +69,66 @@
   }
 
   .storacha {
-    /* Storacha Theme Variables (deep purple background) */
+    /* Storacha Theme Variables (refined purple background) */
     /* These are now used for component colors, not the main background gradient */
-    --background: 218 50% 11%; /* Approximates slate-900 for base background */
-    --foreground: 0 0% 100%; /* white */
-    --card: 260 40% 15%; /* Slightly lighter purple for cards */
+    --background: 260 35% 8%;
+    /* Deeper purple-navy base background */
+    --foreground: 0 0% 100%;
+    /* white */
+    --card: 260 25% 12%;
+    /* Slightly lighter purple for cards with better contrast */
     --card-foreground: 0 0% 100%;
     --popover: var(--background);
     --popover-foreground: var(--foreground);
-    --primary: 273 67% 32%; /* Approximates purple-900 for primary elements */
+    --primary: 270 50% 45%;
+    /* More muted purple for primary elements */
     --primary-foreground: 0 0% 100%;
-    --secondary: 218 50% 11%; /* Approximates slate-900 for secondary elements */
+    --secondary: 260 30% 10%;
+    /* Refined secondary purple */
     --secondary-foreground: 0 0% 100%;
-    --muted: 260 20% 25%; /* Even lighter purple for muted elements */
-    --muted-foreground: 260 10% 70%; /* Light gray-purple for muted text */
-    --accent: 260 30% 20%; /* Same as secondary for accent */
+    --muted: 260 20% 18%;
+    /* Better muted purple for hierarchy */
+    --muted-foreground: 260 15% 75%;
+    /* Lighter gray-purple for better readability */
+    --accent: 260 25% 15%;
+    /* Refined accent color */
     --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 100%; /* Changed to white for storacha theme */
-    --input: 260 20% 30%;
-    --ring: 273 67% 32%; /* Same as primary for ring */
+    --border: 260 20% 20%;
+    /* Purple-tinted border for better integration */
+    --input: 260 25% 15%;
+    --ring: 270 50% 45%;
+    /* Match primary for consistency */
     --radius: 0.75rem;
 
     /* Custom variables for sidebar in storacha theme */
-    --sidebar: 260 50% 8%; /* Solid fallback for sidebar if gradient not applied */
+    --sidebar: 260 50% 8%;
+    /* Solid fallback for sidebar if gradient not applied */
     --sidebar-foreground: var(--foreground);
     --sidebar-primary: var(--primary);
     --sidebar-primary-foreground: var(--primary-foreground);
     --sidebar-accent: var(--accent);
     --sidebar-accent-foreground: var(--accent-foreground);
-    --sidebar-border: var(--border); /* This will now be white */
+    --sidebar-border: var(--border);
+    /* This will now be white */
     --sidebar-ring: var(--ring);
 
     /* New variables for the main background gradient */
-    --gradient-start: 218 50% 11%; /* HSL for slate-900 */
-    --gradient-via: 273 67% 32%; /* HSL for purple-900 */
-    --gradient-end: 218 50% 11%; /* HSL for slate-900 */
+    --gradient-start: 260 40% 6%;
+    /* Deep purple-navy start */
+    --gradient-via: 270 45% 15%;
+    /* Muted mid-tone purple */
+    --gradient-end: 260 35% 8%;
+    /* Slightly lighter purple-navy end */
 
     /* New variables for the sidebar gradient in storacha theme */
-    --sidebar-gradient-start: 218 50% 8%; /* Darker slate-900 */
-    --sidebar-gradient-via: 273 67% 25%; /* Darker purple-900 */
-    --sidebar-gradient-end: 218 50% 8%; /* Darker slate-900 */
+    --sidebar-gradient-start: 260 45% 4%;
+    /* Darker purple-navy for sidebar */
+    --sidebar-gradient-via: 270 40% 12%;
+    /* Darker muted purple */
+    --sidebar-gradient-end: 260 40% 6%;
+    /* Consistent with main gradient start */
   }
 
   html {
@@ -181,6 +199,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -193,10 +212,12 @@
 
 /* Loading animation */
 @keyframes pulse-slow {
+
   0%,
   100% {
     opacity: 0.4;
   }
+
   50% {
     opacity: 0.8;
   }
@@ -221,6 +242,7 @@
     transform: translateY(1rem);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
   }
@@ -241,20 +263,17 @@
 
 /* Custom class for the Storacha main background gradient */
 .bg-storacha-gradient {
-  background-image: linear-gradient(
-    to bottom right,
-    hsl(var(--gradient-start)),
-    hsl(var(--gradient-via)),
-    hsl(var(--gradient-end))
-  );
+  background-image: linear-gradient(to bottom right,
+      hsl(var(--gradient-start)),
+      hsl(var(--gradient-via)),
+      hsl(var(--gradient-end)));
 }
 
 /* Custom class for the Storacha sidebar gradient */
 .bg-sidebar-storacha-gradient {
-  background-image: linear-gradient(
-    to bottom right,
-    hsl(var(--sidebar-gradient-start)),
-    hsl(var(--sidebar-gradient-via)),
-    hsl(var(--sidebar-gradient-end))
-  ) !important; /* Added !important to ensure precedence */
+  background-image: linear-gradient(to bottom right,
+      hsl(var(--sidebar-gradient-start)),
+      hsl(var(--sidebar-gradient-via)),
+      hsl(var(--sidebar-gradient-end))) !important;
+  /* Added !important to ensure precedence */
 }

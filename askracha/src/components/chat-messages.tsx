@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { Bot, User, ExternalLink, Loader2 } from "lucide-react";
+import { useTheme } from "next-themes";
 import type { Message } from "@/types/chat";
 
 // Import ReactMarkdown and remarkGfm
@@ -30,7 +31,7 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
   return (
     // Added 'flex-col' for explicit column direction for consistent spacing
     // 'overflow-x-hidden' is good here to prevent horizontal scroll from messages themselves.
-    <div className="flex flex-col flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 overflow-x-hidden">
+    <div className="flex flex-col flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
       {messages.map((message) => (
         <ChatMessage key={message.id} message={message} />
       ))}
@@ -43,6 +44,20 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
 
 function ChatMessage({ message }: { message: Message }) {
   const isUser = message.type === "user";
+  const { theme } = useTheme();
+  
+  // Get theme-specific prose classes with responsive spacing
+  const getProseClasses = () => {
+    const baseClasses = "prose prose-sm sm:prose-base lg:prose-lg max-w-none leading-relaxed";
+    
+    if (theme === "storacha") {
+      return `${baseClasses} prose-storacha`;
+    } else if (theme === "dark") {
+      return `${baseClasses} dark:prose-invert`;
+    } else {
+      return baseClasses;
+    }
+  };
 
   return (
     // The parent flex container for the message bubble
@@ -54,10 +69,10 @@ function ChatMessage({ message }: { message: Message }) {
       } animate-in slide-in-from-bottom-4 duration-500`}
     >
       <div
-        className={`max-w-[calc(100%-4rem)] md:max-w-4xl rounded-lg border p-4 lg:p-6 shadow-sm ${
-          isUser // Reduced mobile padding for p-4
-            ? "bg-primary text-primary-foreground ml-4 lg:ml-12 border-primary"
-            : "bg-card text-card-foreground mr-4 lg:mr-12 border-border"
+        className={`max-w-[calc(100%-2rem)] sm:max-w-[calc(100%-4rem)] md:max-w-4xl rounded-lg border p-4 lg:p-6 shadow-sm ${
+          isUser
+            ? "bg-primary text-primary-foreground ml-2 sm:ml-4 lg:ml-12 border-primary"
+            : "bg-card text-card-foreground mr-2 sm:mr-4 lg:mr-12 border-border"
         }`}
       >
         <div className="flex items-start gap-4">
@@ -73,17 +88,99 @@ function ChatMessage({ message }: { message: Message }) {
             )}
           </div>
 
-          {/* min-w-0 and prose are key here */}
+          {/* Enhanced message content with improved typography */}
           <div className="flex-1 min-w-0">
-            {/* The prose class handles the internal markdown formatting.
-                            The `prose-sm` will ensure smaller text/spacing on mobile.
-                            The typography config in tailwind.config.js with overflow-x:auto for <pre>
-                            is paramount for code blocks not breaking layout.
-                        */}
-            <div className="prose dark:prose-invert prose-sm sm:prose-base leading-relaxed text-sm lg:text-base">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <div className={`${getProseClasses()} text-sm lg:text-base`}>
+              {/* <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // Custom component overrides for better formatting
+                  pre: ({ children, ...props }) => (
+                    <pre {...props} className="overflow-x-auto whitespace-pre-wrap break-words">
+                      {children}
+                    </pre>
+                  ),
+                  code: ({ children, ...props }: any) => {
+                    const { inline } = props;
+                    return inline ? (
+                      <code {...props} className="whitespace-nowrap">
+                        {children}
+                      </code>
+                    ) : (
+                      <code {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
                 {message.content}
-              </ReactMarkdown>
+              </ReactMarkdown> */}
+              <ReactMarkdown
+  remarkPlugins={[remarkGfm]}
+  components={{
+    pre: ({ children }) => {
+      // Safely extract text from children
+      let text = '';
+      if (children && typeof children === 'object') {
+        // Recursively extract text from React nodes
+        const getText = (node: React.ReactNode): void => {
+          if (node == null) return;
+          if (typeof node === 'string') {
+            text += node;
+          } else if (Array.isArray(node)) {
+            node.forEach(getText);
+          } else if (typeof node === 'object' && 'props' in node) {
+            getText((node as any).props.children);
+          }
+        };
+        getText(children);
+      }
+
+      const handleCopy = () => {
+        navigator.clipboard.writeText(text).catch(err => {
+          console.error('Failed to copy:', err);
+        });
+      };
+
+      return (
+        <div className="group relative my-4">
+          <pre className="overflow-x-auto rounded-lg border border-border bg-secondary p-4 font-mono text-sm leading-relaxed shadow-sm">
+            {children}
+          </pre>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 hover:bg-secondary/50 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Copy code"
+          >
+            Copy
+          </button>
+        </div>
+      );
+    },
+    code({ node, inline, className, children, ...props }: any) {
+      if (inline) {
+        return (
+          <code
+            className="rounded border border-border bg-secondary px-1.5 py-0.5 text-sm font-medium"
+            {...props}
+          >
+            {children}
+          </code>
+        );
+      }
+
+      return (
+        <code className="font-mono text-sm" {...props}>
+          {children}
+        </code>
+      );
+    },
+  }}
+>
+  {message.content}
+</ReactMarkdown>
             </div>
 
             {message.sources && message.sources.length > 0 && (
