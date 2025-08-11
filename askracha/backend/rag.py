@@ -18,7 +18,8 @@ from llama_index.core import (
     Settings,
     StorageContext,
 )
-from llama_index.llms.google_genai import GoogleGenAI
+
+from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from llama_index.readers.web import SimpleWebPageReader, SitemapReader
@@ -104,7 +105,7 @@ class AskRachaRAG:
             raise ValueError('Missing GEMINI_API_KEY, PINECONE_API_KEY, or NEO4J_URI/USER/PASSWORD')
 
         # Configure LLM + Embeddings
-        Settings.llm = GoogleGenAI(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
+        Settings.llm = Gemini(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
         Settings.embed_model = GoogleGenAIEmbedding(model_name='models/text-embedding-004', api_key=self.gemini_api_key)
 
 
