@@ -4,22 +4,79 @@ from flask_cors import CORS
 from rag import AskRachaRAG
 import os
 from datetime import datetime
+import threading
+import time
 
 app = Flask(__name__)
+
+# Fix CORS configuration
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 CORS(app, origins=allowed_origins)
 
 # Global RAG instance
 rag = None
+initialization_status = {
+    'initialized': False,
+    'initializing': False,
+    'error': None,
+    'last_check': None
+}
+
+def auto_initialize_rag():
+    """Auto-initialize RAG system on startup"""
+    global rag, initialization_status
+    
+    initialization_status['initializing'] = True
+    initialization_status['last_check'] = datetime.now().isoformat()
+    
+    try:
+        print("🔄 Auto-initializing RAG system...")
+        
+        # Initialize RAG
+        rag = AskRachaRAG()
+        
+        # Test connection
+        test_result = rag.test_connection()
+        if not test_result.get('success'):
+            raise Exception(f"API test failed: {test_result.get('message')}")
+        
+        # Check if index exists and has documents
+        status = rag.get_status()
+        if status.get('success') and status.get('vector_count', 0) > 0:
+            initialization_status['initialized'] = True
+            initialization_status['error'] = None
+            print(f"✅ RAG system auto-initialized successfully with {status.get('vector_count')} vectors")
+        else:
+            rag.build_index_from_urls(['https://docs.storacha.network'])
+            initialization_status['initialized'] = True
+            
+    except Exception as e:
+        initialization_status['initialized'] = False
+        initialization_status['error'] = str(e)
+        print(f"❌ Auto-initialization failed: {e}")
+    finally:
+        initialization_status['initializing'] = False
+
+# Start auto-initialization in background thread
+def start_auto_initialization():
+    thread = threading.Thread(target=auto_initialize_rag, daemon=True)
+    thread.start()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with initialization status"""
+    global initialization_status
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
         'service': 'AskRacha RAG API',
-        'version': '2.0'
+        'version': '2.0',
+        'initialization': {
+            'initialized': initialization_status['initialized'],
+            'initializing': initialization_status['initializing'],
+            'error': initialization_status['error'],
+            'last_check': initialization_status['last_check']
+        }
     })
 
 @app.route('/api/test-connection', methods=['POST'])
@@ -183,26 +240,52 @@ def query_documents():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    global rag
+    global rag, initialization_status
     try:
+        # Return initialization status if still initializing or not initialized
+        if initialization_status['initializing']:
+            return jsonify({
+                'success': True,
+                'initialized': False,
+                'initializing': True,
+                'message': 'RAG system is initializing...',
+                'last_check': initialization_status['last_check']
+            }), 200
+        
+        if not initialization_status['initialized'] and initialization_status['error']:
+            return jsonify({
+                'success': False,
+                'initialized': False,
+                'initializing': False,
+                'message': f'Initialization failed: {initialization_status["error"]}',
+                'last_check': initialization_status['last_check']
+            }), 200
+
         if rag is None:
             return jsonify({
                 'success': False,
                 'initialized': False,
-                'message': 'RAG system not initialized'
+                'initializing': False,
+                'message': 'RAG system not initialized',
+                'last_check': initialization_status['last_check']
             }), 200
 
         status_payload = rag.get_status()
         safe_payload = json.loads(json.dumps(status_payload))
+        
         # Ensure payload has success flag
         if not status_payload.get('success', True):
             return jsonify({
                 'success': False,
                 'initialized': False,
-                'message': safe_payload.get('message', 'Unknown status error')
+                'initializing': False,
+                'message': safe_payload.get('message', 'Unknown status error'),
+                'last_check': initialization_status['last_check']
             }), 500
 
-        status_payload['initialized'] = True
+        safe_payload['initialized'] = True
+        safe_payload['initializing'] = False
+        safe_payload['auto_init_status'] = initialization_status
         return jsonify(safe_payload), 200
 
     except Exception as e:
@@ -210,7 +293,9 @@ def get_status():
         return jsonify({
             'success': False,
             'initialized': False,
-            'message': f'Error getting status: {e}'
+            'initializing': False,
+            'message': f'Error getting status: {e}',
+            'last_check': initialization_status['last_check']
         }), 500
 
 
@@ -274,5 +359,9 @@ if __name__ == '__main__':
         print("   Please set your API key in backend/.env")
     else:
         print("✅ Gemini API key detected")
+    
+    # Start auto-initialization
+    print("🔄 Starting auto-initialization...")
+    start_auto_initialization()
     
     app.run(debug=True, host='127.0.0.1', port=5000)

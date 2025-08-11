@@ -12,6 +12,7 @@
 
 # poetry
 .venv
+.vscode/
 NOTES
 NOTES/
 *.toml

@@ -13,6 +13,7 @@ A web application that provides an AI-powered interface to interact with Storach
 ## Tech Stack
 
 ### Frontend
+
 - Next.js 15.3.3
 - React 19
 - TypeScript
@@ -20,6 +21,7 @@ A web application that provides an AI-powered interface to interact with Storach
 - Lucide React (for icons)
 
 ### Backend
+
 - Python Flask
 - LlamaIndex
 - Google Gemini AI
@@ -34,18 +36,21 @@ A web application that provides an AI-powered interface to interact with Storach
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/Dhruv-Varshney-developer/ask-racha.git
 cd ask-racha
 ```
 
 2. Install frontend dependencies:
+
 ```bash
 cd askracha
 npm install
 ```
 
 3. Install backend dependencies:
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -54,18 +59,21 @@ pip install -r requirements.txt
 4. Set up environment variables:
 
 For the frontend:
+
 ```bash
 cd askracha
 cp .env.example .env
 ```
 
 For the backend:
+
 ```bash
 cd askracha/backend
 cp .env.example .env
 ```
 
 Then edit both `.env` files and add your Gemini API key:
+
 ```
 GEMINI_API_KEY=your_api_key_here
 ```
@@ -75,30 +83,39 @@ GEMINI_API_KEY=your_api_key_here
 ### Development Mode
 
 To run both frontend and backend concurrently:
+
 ```bash
-npm run dev:full
+npm run dev
+
+python -m app
 ```
 
 Or run them separately:
 
 Frontend:
+
 ```bash
 npm run dev
 ```
 
 Backend:
+
 ```bash
-npm run backend
+cd backend
+
+python -m app
 ```
 
 ### Production Build
 
 1. Build the frontend:
+
 ```bash
 npm run build
 ```
 
 2. Start the production server:
+
 ```bash
 npm run start
 ```
@@ -109,8 +126,7 @@ npm run start
 - `npm run build` - Build the application for production
 - `npm run start` - Start the production server
 - `npm run lint` - Run ESLint for code linting
-- `npm run backend` - Start the Python backend server
-- `npm run dev:full` - Run both frontend and backend concurrently
+- `python -m app` - Start the Python backend server
 
 ## Project Structure
 

@@ -108,8 +108,8 @@ class AskRachaRAG:
         Settings.llm = Gemini(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
         Settings.embed_model = GoogleGenAIEmbedding(model_name='models/text-embedding-004', api_key=self.gemini_api_key)
 
-
-        self.genai_client = GoogleGenAI(model='models/gemini-2.0-flash', api_key=self.gemini_api_key, temperature=0.1)
+        # Keep reference to LLM for direct use
+        self.llm = Settings.llm
 
         # 1. Initialize Pinecone
         pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
@@ -572,7 +572,7 @@ class AskRachaRAG:
         """Test the Gemini API connection"""
         try:
             # Use the .complete() method for a simple request
-            response = self.genai_client.complete(
+            response = self.llm.complete(
                 'Hello! Please respond with "Connection successful"'
             )
 
