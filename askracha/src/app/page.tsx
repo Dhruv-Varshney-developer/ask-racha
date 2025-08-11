@@ -39,7 +39,7 @@ interface SystemStatus {
     framework: string;
   };
 }
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function AskRacha() {
   const [messages, setMessages] = useState<Message[]>([]);
