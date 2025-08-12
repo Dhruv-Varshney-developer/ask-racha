@@ -1,0 +1,10 @@
+services:
+  qdrant:
+    image: qdrant/qdrant
+    ports:
+      - '6343:6333'
+      - '6344:6334'
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT_ALLOW_RECOVERY=true

@@ -9,3 +9,5 @@ python-dotenv
 requests
 beautifulsoup4
 lxml
+qdrant-client>=1.7.0
+pytest>=7.0.0
