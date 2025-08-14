@@ -232,6 +232,158 @@ def list_documents():
             'error': f'Error listing documents: {str(e)}'
         }), 500
 
+@app.route("/api/vector-store/stats", methods=["GET"])
+def get_vector_store_stats():
+    """Get detailed information about Qdrant vector store"""
+    global rag
+
+    if not rag:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "RAG system not initialized. Please initialize first.",
+                }
+            ),
+            400,
+        )
+
+    try:
+        stats = rag.vector_store.get_stats()
+        if not stats["success"]:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f'Failed to get vector store stats: {stats["message"]}',
+                    }
+                ),
+                500,
+            )
+        
+        try:
+            from qdrant_client.http.models import ScrollRequest
+
+            points = rag.vector_store.client.scroll(
+                collection_name=rag.vector_store.collection_name,
+                limit=1000,
+                with_payload=True,
+            )[0]
+
+            points_info = []
+            for point in points:
+                point_info = {
+                    "id": point.id,
+                    "source": point.payload.get("source", "N/A"),
+                    "title": point.payload.get("title", "N/A"),
+                    "type": point.payload.get("type", "N/A"),
+                    "length": point.payload.get("length", "N/A"),
+                    "timestamp": point.payload.get("timestamp", "N/A"),
+                    "text_preview": (
+                        point.payload.get("text", "")[:100] + "..."
+                        if len(point.payload.get("text", "")) > 100
+                        else point.payload.get("text", "")
+                    ),
+                }
+                points_info.append(point_info)
+
+            return jsonify(
+                {
+                    "success": True,
+                    "collection_name": rag.vector_store.collection_name,
+                    "stats": {
+                        "points_count": stats["stats"].points_count,
+                        "vectors_count": stats["stats"].vectors_count,
+                        "segments_count": stats["stats"].segments_count,
+                        "status": stats["stats"].status,
+                    },
+                    # "points": points_info,
+                    "total_points": len(points_info),
+                }
+            )
+
+        except Exception as e:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f"Failed to retrieve point details: {str(e)}",
+                    }
+                ),
+                500,
+            )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Error getting vector store stats: {str(e)}",
+                }
+            ),
+            500,
+        )
+
+@app.route("/api/vector-store/clear", methods=["POST"])
+def clear_vector_store():
+    """Clear all documents from Qdrant vector store"""
+    global rag
+
+    if not rag:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "RAG system not initialized. Please initialize first.",
+                }
+            ),
+            400,
+        )
+
+    try:
+        stats = rag.vector_store.get_stats()
+        if not stats["success"]:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": f'Failed to get current stats: {stats["message"]}',
+                    }
+                ),
+                500,
+            )
+
+        current_count = stats["stats"].points_count
+
+        if current_count == 0:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Vector store is already empty",
+                    "deleted_count": 0,
+                }
+            )
+
+        rag.vector_store.client.delete_collection(rag.vector_store.collection_name)
+        rag.vector_store.initialize_index()
+
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Successfully cleared vector store",
+                "deleted_count": current_count,
+                "collection_recreated": True,
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {"success": False, "message": f"Error clearing vector store: {str(e)}"}
+            ),
+            500,
+        )
+
 if __name__ == '__main__':
     print("🚀 Starting AskRacha API Server...")
     print("📡 API available at: http://localhost:5000")

@@ -3,7 +3,10 @@ from datetime import datetime, timedelta
 from llama_index.core import Document
 import sys
 import os
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from storage.vector_store import VectorStore
 

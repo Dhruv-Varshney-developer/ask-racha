@@ -20,6 +20,8 @@ from llama_index.readers.web import SimpleWebPageReader, SitemapReader
 import requests
 from bs4 import BeautifulSoup
 
+from storage.vector_store import VectorStore
+
 load_dotenv()
 
 
@@ -46,9 +48,32 @@ class AskRachaRAG:
             api_key=self.gemini_api_key
         )
 
+        self.vector_store = VectorStore(is_local=True)
+
         self.index = None
         self.query_engine = None
         self.documents = []
+
+        self._initialize_vector_store()
+
+    def _initialize_vector_store(self):
+        """Initialize the vector store and load existing documents if any"""
+        try:
+            init_result = self.vector_store.initialize_index()
+            if not init_result["success"]:
+                print(
+                    f"Warning: Vector store initialization failed: {init_result['message']}"
+                )
+                return
+
+            stats = self.vector_store.get_stats()
+            if stats["success"] and stats["stats"].points_count > 0:
+                print(
+                    f"Found {stats['stats'].points_count} existing documents in vector store"
+                )
+                # TODO: Load existing documents into LlamaIndex for querying
+        except Exception as e:
+            print(f"Warning: Error initializing vector store: {e}")
 
     def extract_content_title(self, content: str) -> str:
         """Extract meaningful title from document content"""
@@ -220,7 +245,19 @@ class AskRachaRAG:
                     'failed_urls': all_failed_urls
                 }
 
-            # Create vector index with enhanced configuration
+            print(
+                f"💾 Storing {len(all_documents)} documents in persistent vector store..."
+            )
+            vector_result = self.vector_store.upsert_documents(all_documents)
+
+            if not vector_result["success"]:
+                return {
+                    "success": False,
+                    "message": f'Error storing documents in vector store: {vector_result["message"]}',
+                    "loaded_urls": [],
+                    "failed_urls": urls,
+                }
+
             print(
                 f"🧠 Creating comprehensive knowledge index from {len(all_documents)} documents...")
             self.index = VectorStoreIndex.from_documents(
@@ -243,7 +280,8 @@ class AskRachaRAG:
                 'loaded_urls': all_loaded_urls,
                 'failed_urls': all_failed_urls,
                 'document_count': len(all_documents),
-                'total_chars': sum(len(doc.text) for doc in all_documents)
+                'total_chars': sum(len(doc.text) for doc in all_documents),
+                "vector_store_ids": vector_result.get("ids", []),
             }
 
         except Exception as e:
