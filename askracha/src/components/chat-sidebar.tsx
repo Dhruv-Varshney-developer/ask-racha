@@ -19,8 +19,6 @@ interface ChatSidebarProps {
   onClose: () => void;
   status: SystemStatus | null;
   isInitialized: boolean;
-  isLoading: boolean;
-  loadDefaultDocuments: () => Promise<void>;
   suggestions: string[];
   setInput: (input: string) => void;
 }
@@ -30,8 +28,6 @@ export function ChatSidebar({
   onClose,
   status,
   isInitialized,
-  isLoading,
-  loadDefaultDocuments,
   suggestions,
   setInput,
 }: ChatSidebarProps) {
@@ -120,26 +116,7 @@ export function ChatSidebar({
             )}
           </div>
 
-          {/* Load Documents */}
-          {isInitialized && (!status || !status.documents_loaded) && (
-            <button
-              onClick={loadDefaultDocuments}
-              disabled={isLoading}
-              className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6 gap-3 cursor-pointer hover:underline"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Loading Knowledge Base...
-                </>
-              ) : (
-                <>
-                  <Globe className="h-5 w-5" />
-                  Load Storacha Docs
-                </>
-              )}
-            </button>
-          )}
+
 
           {/* Quick Start */}
           {status && status.documents_loaded > 0 && (

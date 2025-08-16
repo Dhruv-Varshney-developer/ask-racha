@@ -40,3 +40,4 @@ ENV/
 
 # Qdrant local storage
 askracha/backend/storage/qdrant_storage/ 
+askracha/backend/persistent_index/

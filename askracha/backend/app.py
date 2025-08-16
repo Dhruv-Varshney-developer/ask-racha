@@ -11,6 +11,43 @@ CORS(app, origins=allowed_origins)
 # Global RAG instance
 rag = None
 
+def load_default_documents():
+    """Load default documentation on server startup"""
+    global rag
+    if not rag:
+        try:
+            rag = AskRachaRAG()
+        except Exception as e:
+            print(f"Failed to initialize RAG for default documents: {e}")
+            return
+
+    # Check if documents already exist in vector store
+    try:
+        stats = rag.vector_store.get_stats()
+        if stats["success"] and stats["stats"].points_count > 0:
+            print(
+                f"Vector store already contains {stats['stats'].points_count} documents, skipping default loading"
+            )
+            return
+    except Exception as e:
+        print(f"Could not check vector store stats: {e}")
+
+    default_urls = [
+        "https://docs.storacha.network/quickstart/",
+        "https://docs.storacha.network/concepts/ucans-and-storacha/",
+    ]
+
+    try:
+        print(f"Loading default documents on startup...")
+        result = rag.load_documents(default_urls)
+        if result["success"]:
+            print(f"Successfully loaded {result['document_count']} default documents")
+            rag.get_status()
+        else:
+            print(f"Failed to load default documents: {result['message']}")
+    except Exception as e:
+        print(f"Error loading default documents: {e}")
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -327,6 +364,12 @@ def get_vector_store_stats():
 @app.route("/api/vector-store/clear", methods=["POST"])
 def clear_vector_store():
     """Clear all documents from Qdrant vector store"""
+    if os.getenv('FLASK_ENV') == 'production':
+        return jsonify({
+            'success': False,
+            'message': 'This endpoint is disabled in production for data safety'
+        }), 403
+    
     global rag
 
     if not rag:
@@ -397,4 +440,6 @@ if __name__ == '__main__':
     else:
         print("✅ Gemini API key detected")
     
+    load_default_documents()
+
     app.run(debug=True, host='127.0.0.1', port=5000)
