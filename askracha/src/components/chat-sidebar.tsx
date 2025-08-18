@@ -45,10 +45,9 @@ export function ChatSidebar({
           border-r border-border
           transform transition-transform duration-300 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-          ${
-            theme === "storacha"
-              ? "bg-sidebar-storacha-gradient backdrop-blur-none border-white" // Apply gradient and ensure no blur. Removed bg-opacity-100 as it's for solid colors.
-              : "bg-[hsl(var(--sidebar))] backdrop-blur-none" // Directly use HSL color for solid background and ensure no blur. Removed bg-opacity-100.
+          ${theme === "storacha"
+            ? "bg-sidebar-storacha-gradient backdrop-blur-none" // Apply gradient and ensure no blur. Removed bg-opacity-100 as it's for solid colors.
+            : "bg-[hsl(var(--sidebar))] backdrop-blur-none" // Directly use HSL color for solid background and ensure no blur. Removed bg-opacity-100.
           }
         `}
       >
@@ -126,7 +125,7 @@ export function ChatSidebar({
             <button
               onClick={loadDefaultDocuments}
               disabled={isLoading}
-              className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6 gap-3"
+              className="w-full inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6 gap-3 cursor-pointer hover:underline"
             >
               {isLoading ? (
                 <>
@@ -157,7 +156,7 @@ export function ChatSidebar({
                       setInput(suggestion);
                       onClose();
                     }}
-                    className="w-full text-left p-4 rounded-md bg-sidebar hover:bg-sidebar-accent text-sidebar-foreground hover:text-sidebar-accent-foreground text-sm transition-colors border border-sidebar-border hover:border-sidebar-border/80"
+                    className="w-full text-left p-4 rounded-md bg-sidebar text-sidebar-foreground hover:text-sidebar-accent-foreground text-sm transition-colors border border-sidebar-border hover:border-sidebar-border/80 hover:bg-sidebar/50 cursor-pointer hover:border-white"
                   >
                     {suggestion}
                   </button>
