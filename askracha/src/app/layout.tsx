@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css"; // Your merged CSS file
 import { ThemeProvider } from "@/components/theme-provider";
+import ClarityAnalytics from "@/components/analytics/ClarityAnalytics";
+import ClientClarityWrapper from "@/components/analytics/ClientClarityWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -37,6 +39,8 @@ export default function RootLayout({
         >
           {children}
         </ThemeProvider>
+        <ClarityAnalytics />
+        <ClientClarityWrapper />
       </body>
     </html>
   );
