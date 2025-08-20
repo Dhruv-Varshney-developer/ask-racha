@@ -68,6 +68,41 @@ cp .env.example .env
 Then edit both `.env` files and add your Gemini API key:
 ```
 GEMINI_API_KEY=your_api_key_here
+
+```
+
+## Vector Store Setup
+
+### Local Development
+
+1. Make sure Docker is installed and running
+2. Start Qdrant:
+
+```bash
+cd askracha/backend/storage
+docker compose up -d
+```
+
+3. Verify the setup:
+
+```bash
+cd askracha/backend
+python -m unittest storage/tests/test_vector_store.py -v
+```
+
+### Environment Variables
+
+For local development:
+
+- No additional env vars needed, uses Qdrant Local by default
+- Qdrant runs on port 6343 (configurable via QDRANT_PORT)
+
+For production:
+
+```env
+QDRANT_HOST=your_qdrant_host
+QDRANT_PORT=6333
+QDRANT_API_KEY=your_api_key
 ```
 
 ## Running the Application
