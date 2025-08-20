@@ -149,7 +149,7 @@ class AskRachaRAG:
                 print("Persistent index loaded successfully (no embedding regeneration)")
                 return
             
-            print("Creating minimal index for existing documents...")
+            print("Creating minimal index for existing documents...(might take a minute )")
             self.index = VectorStoreIndex.from_documents(
                 self.documents,
                 show_progress=False,

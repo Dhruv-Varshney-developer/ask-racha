@@ -1,0 +1,31 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT_ALLOW_RECOVERY=true
+
+  backend:
+    image: python:3.10-slim
+    container_name: askracha-backend
+    working_dir: /app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./:/app
+      - backend_index:/app/persistent_index
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - FLASK_ENV=${FLASK_ENV:-development}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    command: sh -lc "pip install --no-cache-dir -r requirements.txt && python -u app.py"
+    depends_on:
+      - qdrant
+
+volumes:
+  qdrant_data:
+  backend_index: 

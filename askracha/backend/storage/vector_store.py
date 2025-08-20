@@ -18,7 +18,9 @@ class VectorStore:
     def __init__(self, is_local: bool = True):
         """Initialize vector store with local or cloud configuration."""
         self.is_local = is_local
-        self.host = "localhost" if is_local else os.getenv("QDRANT_HOST")
+        env_host = os.getenv("QDRANT_HOST")
+        env_port = os.getenv("QDRANT_PORT")
+        self.host = env_host if env_host else ("localhost" if is_local else os.getenv("QDRANT_HOST"))
         self.api_key = None if is_local else os.getenv("QDRANT_API_KEY")
         self.port = int(
             os.getenv(
