@@ -13,12 +13,16 @@ from llama_index.core import (
     Settings,
     StorageContext
 )
+
+from llama_index.core.indices.loading import load_index_from_storage
 from llama_index.llms.gemini import Gemini
 from llama_index.embeddings.gemini import GeminiEmbedding
 from llama_index.readers.web import SimpleWebPageReader, SitemapReader
 
 import requests
 from bs4 import BeautifulSoup
+
+from storage.vector_store import VectorStore
 
 load_dotenv()
 
@@ -46,9 +50,166 @@ class AskRachaRAG:
             api_key=self.gemini_api_key
         )
 
+        self.vector_store = VectorStore(is_local=True)
+
         self.index = None
         self.query_engine = None
         self.documents = []
+        self.documents_already_embedded = False  # Flag to track if docs have embeddings
+
+        self._initialize_vector_store()
+
+    def _initialize_vector_store(self):
+        """Initialize the vector store and load existing documents if any"""
+        try:
+            init_result = self.vector_store.initialize_index()
+            if not init_result["success"]:
+                print(
+                    f"Warning: Vector store initialization failed: {init_result['message']}"
+                )
+                return
+
+            stats = self.vector_store.get_stats()
+            if stats["success"] and stats["stats"].points_count > 0:
+                print(
+                    f"Found {stats['stats'].points_count} existing documents in vector store"
+                )
+                self._load_existing_documents()
+        except Exception as e:
+            print(f"Warning: Error initializing vector store: {e}")
+
+    def _load_existing_documents(self):
+        """Load existing documents from vector store into memory and load existing index"""
+        try:
+            print("Loading existing documents from vector store...")
+            
+            all_points = self.vector_store.client.scroll(
+                collection_name=self.vector_store.collection_name,
+                limit=1000,
+                with_payload=True
+            )[0]
+            
+            if all_points:
+                print(f"Found {len(all_points)} points in vector store")
+
+                for point in all_points:
+                    if hasattr(point, 'payload') and point.payload:
+                        text = point.payload.get('text', '')
+                        
+                        metadata = {}
+                        if 'source' in point.payload:
+                            metadata['source'] = point.payload['source']
+                        if 'title' in point.payload:
+                            metadata['title'] = point.payload['title']
+                        if 'type' in point.payload:
+                            metadata['type'] = point.payload['type']
+                        if 'length' in point.payload:
+                            metadata['length'] = point.payload['length']
+                        
+                        doc = Document(text=text, metadata=metadata)
+                        self.documents.append(doc)
+                
+                print(f"Loaded {len(self.documents)} documents into memory")
+                
+                if self.documents:
+                    self._create_lightweight_index()
+            else:
+                print("No documents found in vector store")
+                
+        except Exception as e:
+            print(f"Error loading existing documents: {e}")
+
+    def _build_index(self):
+        """Build LlamaIndex from loaded documents"""
+        try:
+            print(f"Building knowledge index from {len(self.documents)} documents...")
+            self.index = VectorStoreIndex.from_documents(
+                self.documents,
+                show_progress=True
+            )
+
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=6,
+                response_mode="tree_summarize",
+                verbose=True
+            )
+            print("Index and query engine built successfully")
+            
+            self._save_persistent_index()
+            
+        except Exception as e:
+            print(f"Error building index: {e}")
+    
+    def _create_lightweight_index(self):
+        """Create a lightweight index without regenerating embeddings"""
+        try:
+            print("Creating lightweight index from existing documents...")
+            
+            if self._load_persistent_index():
+                print("Persistent index loaded successfully (no embedding regeneration)")
+                return
+            
+            print("Creating minimal index for existing documents...(might take a minute )")
+            self.index = VectorStoreIndex.from_documents(
+                self.documents,
+                show_progress=False,
+                embed_metadata=False
+            )
+            
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=6,
+                response_mode="tree_summarize",
+                verbose=True
+            )
+            
+            self._save_persistent_index()
+            
+            print("Lightweight index created and saved for future use")
+            
+        except Exception as e:
+            print(f"Error creating lightweight index: {e}")
+            print("Falling back to full index rebuild...")
+            self._build_index()
+
+    def _save_persistent_index(self):
+        """Save the current index to disk for future loading"""
+        try:
+            index_dir = "persistent_index"
+            if not os.path.exists(index_dir):
+                os.makedirs(index_dir)
+            
+            self.index.storage_context.persist(persist_dir=index_dir)
+            print(f"Index saved to {index_dir}")
+        except Exception as e:
+            print(f"Warning: Could not save persistent index: {e}")
+    
+    def _load_persistent_index(self):
+        """Load existing index from disk if available"""
+        try:
+            index_dir = "persistent_index"
+            
+            if not os.path.exists(index_dir):
+                return False
+            
+            if not os.path.exists(os.path.join(index_dir, "docstore.json")):
+                return False
+            
+            print(f"Loading persistent index from {index_dir}...")
+            
+            storage_context = StorageContext.from_defaults(persist_dir=index_dir)
+            self.index = load_index_from_storage(storage_context)
+            
+            self.query_engine = self.index.as_query_engine(
+                similarity_top_k=6,
+                response_mode="tree_summarize",
+                verbose=True
+            )
+            
+            return True
+            
+        except Exception as e:
+            print(f"Warning: Could not load persistent index: {e}")
+            return False
 
     def extract_content_title(self, content: str) -> str:
         """Extract meaningful title from document content"""
@@ -220,7 +381,19 @@ class AskRachaRAG:
                     'failed_urls': all_failed_urls
                 }
 
-            # Create vector index with enhanced configuration
+            print(
+                f"💾 Storing {len(all_documents)} documents in persistent vector store..."
+            )
+            vector_result = self.vector_store.upsert_documents(all_documents)
+
+            if not vector_result["success"]:
+                return {
+                    "success": False,
+                    "message": f'Error storing documents in vector store: {vector_result["message"]}',
+                    "loaded_urls": [],
+                    "failed_urls": urls,
+                }
+
             print(
                 f"🧠 Creating comprehensive knowledge index from {len(all_documents)} documents...")
             self.index = VectorStoreIndex.from_documents(
@@ -243,7 +416,8 @@ class AskRachaRAG:
                 'loaded_urls': all_loaded_urls,
                 'failed_urls': all_failed_urls,
                 'document_count': len(all_documents),
-                'total_chars': sum(len(doc.text) for doc in all_documents)
+                'total_chars': sum(len(doc.text) for doc in all_documents),
+                "vector_store_ids": vector_result.get("ids", []),
             }
 
         except Exception as e:
