@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from rag import AskRachaRAG
+from document_scheduler import DocumentUpdateScheduler
 import os
 from datetime import datetime
 
@@ -11,9 +12,13 @@ CORS(app, origins=allowed_origins)
 # Global RAG instance
 rag = None
 
+# Global scheduler instance
+document_scheduler = None
+
+
 def load_default_documents():
     """Load default documentation on server startup"""
-    global rag
+    global rag, document_scheduler
     if not rag:
         try:
             rag = AskRachaRAG()
@@ -28,6 +33,10 @@ def load_default_documents():
             print(
                 f"Vector store already contains {stats['stats'].points_count} documents, skipping default loading"
             )
+            if document_scheduler is None:
+                document_scheduler = DocumentUpdateScheduler(rag)
+                document_scheduler.start()
+                print("Document update scheduler started")
             return
     except Exception as e:
         print(f"Could not check vector store stats: {e}")
@@ -36,17 +45,23 @@ def load_default_documents():
         "https://docs.storacha.network/quickstart/",
         "https://docs.storacha.network/concepts/ucans-and-storacha/",
     ]
-
+    
     try:
         print(f"Loading default documents on startup...")
         result = rag.load_documents(default_urls)
         if result["success"]:
             print(f"Successfully loaded {result['document_count']} default documents")
-            rag.get_status()
+            print(rag.get_status())
+            
+            document_scheduler = DocumentUpdateScheduler(rag)
+            document_scheduler.start()
+            print("Document update scheduler started")
+            
         else:
             print(f"Failed to load default documents: {result['message']}")
     except Exception as e:
         print(f"Error loading default documents: {e}")
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -427,6 +442,52 @@ def clear_vector_store():
             500,
         )
 
+
+@app.route("/api/scheduler/status", methods=["GET"])
+def get_scheduler_status():
+    """Get document scheduler status"""
+    global document_scheduler
+    
+    if not document_scheduler:
+        return jsonify({
+            'success': False,
+            'message': 'Document scheduler not initialized'
+        }), 400
+    
+    try:
+        status = document_scheduler.get_status()
+        return jsonify({
+            'success': True,
+            'scheduler_status': status
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error getting scheduler status: {str(e)}'
+        }), 500
+
+
+@app.route("/api/scheduler/trigger-update", methods=["POST"])
+def trigger_manual_update():
+    """Manually trigger document update"""
+    global document_scheduler
+    
+    if not document_scheduler:
+        return jsonify({
+            'success': False,
+            'message': 'Document scheduler not initialized'
+        }), 400
+    
+    try:
+        result = document_scheduler.trigger_manual_update()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error triggering manual update: {str(e)}'
+        }), 500
+
+
 if __name__ == '__main__':
     print("🚀 Starting AskRacha API Server...")
     print("📡 API available at: http://localhost:5000")
@@ -442,4 +503,4 @@ if __name__ == '__main__':
     
     load_default_documents()
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)
