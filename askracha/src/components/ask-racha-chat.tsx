@@ -23,16 +23,12 @@ export function AskRachaChat() {
     status,
     isInitialized,
     checkStatus,
-    initializeRAG,
-    loadDefaultDocuments,
-    loadingDocuments,
   } = useSystemStatus();
   const { theme } = useTheme(); // Get the current theme
 
   useEffect(() => {
     checkStatus();
-    initializeRAG();
-  }, [checkStatus, initializeRAG]);
+  }, [checkStatus]);
 
   const suggestions = [
     "What is Storacha and how does it work?",
@@ -71,10 +67,6 @@ export function AskRachaChat() {
         onClose={() => setSidebarOpen(false)}
         status={status}
         isInitialized={isInitialized}
-        isLoading={loadingDocuments}
-        loadDefaultDocuments={async () => {
-          await loadDefaultDocuments();
-        }}
         suggestions={suggestions}
         setInput={setInput}
       />
