@@ -5,6 +5,7 @@ This README covers only the backend setup (API + Qdrant via Docker Compose).
 ## 1) Prerequisites
 - Docker and Docker Compose
 - A valid Gemini API key
+- Run `./setup-repos.sh` in repos folder to clone the repos
 
 ## 2) Create .env (in this folder)
 Create a file named `.env` in `askracha/backend` with the following contents:

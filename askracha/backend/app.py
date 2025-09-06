@@ -4,6 +4,7 @@ from rag import AskRachaRAG
 from document_scheduler import DocumentUpdateScheduler
 import os
 from datetime import datetime
+from llama_index.core import VectorStoreIndex
 
 app = Flask(__name__)
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
@@ -33,6 +34,7 @@ def load_default_documents():
             print(
                 f"Vector store already contains {stats['stats'].points_count} documents, skipping default loading"
             )
+            # Ensure scheduler is started even if we skip loading
             if document_scheduler is None:
                 document_scheduler = DocumentUpdateScheduler(rag)
                 document_scheduler.start()
@@ -41,18 +43,34 @@ def load_default_documents():
     except Exception as e:
         print(f"Could not check vector store stats: {e}")
 
-    default_urls = [
-        "https://docs.storacha.network/quickstart/",
-        "https://docs.storacha.network/concepts/ucans-and-storacha/",
-    ]
-    
     try:
+        print("Processing GitHub repositories...")
+        rag._process_github_repos() 
+        
+        default_urls = [
+            "https://docs.storacha.network/quickstart/",
+            "https://docs.storacha.network/concepts/ucans-and-storacha/",
+        ]
         print(f"Loading default documents on startup...")
         result = rag.load_documents(default_urls)
+        
         if result["success"]:
-            print(f"Successfully loaded {result['document_count']} default documents")
+            print(f"🧠 Creating comprehensive index from {len(rag.documents)} documents...")
+            rag.index = VectorStoreIndex.from_documents(
+                rag.documents,
+                show_progress=True
+            )
+            
+            rag.query_engine = rag.index.as_query_engine(
+                similarity_top_k=6,
+                response_mode="tree_summarize",
+                verbose=True
+            )
+            
+            print(f"Successfully loaded default documents")
             print(rag.get_status())
             
+            # Initialize and start the document scheduler
             document_scheduler = DocumentUpdateScheduler(rag)
             document_scheduler.start()
             print("Document update scheduler started")
@@ -92,7 +110,7 @@ def test_connection():
         return jsonify(result)
     else:
         return jsonify(result), 500
-
+    
 @app.route('/api/initialize', methods=['POST'])
 def initialize_rag():
     """Initialize the RAG system"""
@@ -100,7 +118,7 @@ def initialize_rag():
     try:
         print("🚀 Initializing AskRacha RAG system...")
         rag = AskRachaRAG()
-        
+
         # Test the connection
         test_result = rag.test_connection()
         if not test_result['success']:
@@ -108,7 +126,7 @@ def initialize_rag():
                 'success': False,
                 'message': f'RAG initialized but API test failed: {test_result["message"]}'
             }), 500
-        
+
         return jsonify({
             'success': True,
             'message': 'RAG system initialized successfully with Gemini 2.0 Flash',
@@ -126,44 +144,44 @@ def initialize_rag():
 def load_documents():
     """Load documents into the RAG system"""
     global rag
-    
+
     if not rag:
         return jsonify({
             'success': False,
             'message': 'RAG system not initialized. Please initialize first.'
         }), 400
-    
+
     data = request.get_json()
     urls = data.get('urls', [])
-    
+
     if not urls:
         return jsonify({
             'success': False,
             'message': 'No URLs provided'
         }), 400
-    
+
     # Validate URLs
     valid_urls = []
     for url in urls:
         url = url.strip()
         if url and (url.startswith('http://') or url.startswith('https://')):
             valid_urls.append(url)
-    
+
     if not valid_urls:
         return jsonify({
             'success': False,
             'message': 'No valid URLs provided'
         }), 400
-    
+
     try:
         print(f"📄 Loading {len(valid_urls)} documents...")
         result = rag.load_documents(valid_urls)
-        
+
         if result['success']:
             print(f"✅ Successfully loaded {result['document_count']} documents")
         else:
             print(f"❌ Failed to load documents: {result['message']}")
-        
+
         return jsonify(result)
     except Exception as e:
         print(f"❌ Error loading documents: {e}")
@@ -171,7 +189,7 @@ def load_documents():
             'success': False,
             'message': f'Error loading documents: {str(e)}'
         }), 500
-
+    
 @app.route('/api/query', methods=['POST'])
 def query_documents():
     """Query the RAG system"""
