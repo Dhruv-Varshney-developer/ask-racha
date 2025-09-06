@@ -23,6 +23,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from storage.vector_store import VectorStore
+from cleaning.processors import RepoProcessor
 
 load_dotenv()
 
@@ -77,6 +78,28 @@ class AskRachaRAG:
                 self._load_existing_documents()
         except Exception as e:
             print(f"Warning: Error initializing vector store: {e}")
+            
+    def _process_github_repos(self):
+        """Process GitHub repositories and add them to the vector store"""
+        try:
+            processor = RepoProcessor()
+            repo_docs = processor.process_repos()
+            
+            if repo_docs:
+                print(f"Found {len(repo_docs)} documents in GitHub repos")
+                
+                result = self.vector_store.upsert_documents(repo_docs)
+                if not result["success"]:
+                    raise Exception(f"Failed to store repo documents: {result['message']}")
+                
+                self.documents += repo_docs
+                    
+                print("Successfully processed and stored GitHub repo documents")
+            else:
+                print("No documents found in GitHub repos")
+                
+        except Exception as e:
+            print(f"Error processing GitHub repos: {e}")
 
     def _load_existing_documents(self):
         """Load existing documents from vector store into memory and load existing index"""
@@ -394,21 +417,8 @@ class AskRachaRAG:
                     "failed_urls": urls,
                 }
 
-            print(
-                f"🧠 Creating comprehensive knowledge index from {len(all_documents)} documents...")
-            self.index = VectorStoreIndex.from_documents(
-                all_documents,
-                show_progress=True
-            )
 
-            # Create advanced query engine
-            self.query_engine = self.index.as_query_engine(
-                similarity_top_k=6,  # Retrieve more relevant chunks
-                response_mode="tree_summarize",  # Better synthesis for comprehensive responses
-                verbose=True
-            )
-
-            self.documents = all_documents
+            self.documents += all_documents
 
             return {
                 'success': True,
