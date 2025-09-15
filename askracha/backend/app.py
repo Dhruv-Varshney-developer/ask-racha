@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from rag import AskRachaRAG
 from document_scheduler import DocumentUpdateScheduler
+from rate_limit_middleware import create_rate_limit_middleware
 import os
 import sys
 from datetime import datetime
@@ -10,6 +11,9 @@ from llama_index.core import VectorStoreIndex
 app = Flask(__name__)
 allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 CORS(app, origins=allowed_origins)
+
+# Initialize rate limiting middleware
+rate_limit_middleware = create_rate_limit_middleware(app)
 
 # Global RAG instance
 rag = None
@@ -193,19 +197,21 @@ def load_documents():
     
 @app.route('/api/query', methods=['POST'])
 def query_documents():
-    """Query the RAG system"""
+    """Query the RAG system with rate limiting"""
     global rag
     
     if not rag:
         return jsonify({
             'success': False,
-            'message': 'RAG system not initialized. Please initialize first.'
+            'message': 'RAG system not initialized. Please initialize first.',
+            'type': 'system_error'
         }), 400
     
     if not rag.query_engine:
         return jsonify({
             'success': False,
-            'message': 'No documents loaded. Please load documents first.'
+            'message': 'No documents loaded. Please load documents first.',
+            'type': 'system_error'
         }), 400
     
     data = request.get_json()
@@ -214,7 +220,8 @@ def query_documents():
     if not question:
         return jsonify({
             'success': False,
-            'message': 'No question provided'
+            'message': 'No question provided',
+            'type': 'validation_error'
         }), 400
     
     try:
@@ -223,15 +230,37 @@ def query_documents():
         
         if result['success']:
             print(f"✅ Query processed successfully")
+            # Add rate limit info to successful responses
+            response = jsonify(result)
+            
+            # Add helpful rate limit information for users
+            from flask import g
+            if hasattr(g, 'rate_limit_result') and g.rate_limit_result:
+                reset_time = g.rate_limit_result.reset_time
+                response.headers['X-Next-Request-Available'] = reset_time.isoformat()
+                
+                # Add user-friendly message about when they can ask again
+                result['rate_limit_info'] = {
+                    'next_request_available': reset_time.isoformat(),
+                    'message': f'You can ask your next question after {reset_time.strftime("%H:%M:%S")}'
+                }
+                response = jsonify(result)
+            
+            return response
         else:
             print(f"❌ Query failed: {result.get('answer', 'Unknown error')}")
+            return jsonify({
+                'success': False,
+                'message': result.get('answer', 'Query processing failed'),
+                'type': 'query_error'
+            }), 500
         
-        return jsonify(result)
     except Exception as e:
         print(f"❌ Error processing query: {e}")
         return jsonify({
             'success': False,
-            'message': f'Error processing query: {str(e)}'
+            'message': f'Error processing query: {str(e)}',
+            'type': 'system_error'
         }), 500
 
 @app.route('/api/status', methods=['GET'])

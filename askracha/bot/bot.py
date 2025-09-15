@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from api_client import APIClient, APIResponse
 from message_processor import MessageProcessor, MessageContext
 from config import BotConfig
+from discord_rate_limiter import DiscordRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -56,11 +57,12 @@ class DiscordBot(commands.Bot):
         self.config = config
         self.api_client = api_client
         self.message_processor = message_processor
+        self.discord_rate_limiter = DiscordRateLimiter()
         self.metrics = BotMetrics()
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = 5
         
-        logger.info("Discord bot client initialized")
+        logger.info("Discord bot client initialized with rate limiting")
     
     async def setup_hook(self):
         """Called when the bot is starting up."""
@@ -140,9 +142,29 @@ class DiscordBot(commands.Bot):
             question=question
         )
         
-        # Process the mention
-        await self.handle_mention(message, context)
+        # Check rate limit before processing
+        await self.handle_mention_with_rate_limit(message, context)
     
+    async def handle_mention_with_rate_limit(self, message: discord.Message, context: MessageContext):
+        """Process @racha mentions with rate limiting check."""
+        try:
+            # Check rate limit first
+            rate_result = self.discord_rate_limiter.check_rate_limit(context.user_id)
+            
+            if not rate_result.allowed:
+                # User is rate limited, send rate limit message
+                await self.discord_rate_limiter.handle_rate_limited_user(message, rate_result)
+                logger.info(f"Rate limited user {context.username} ({context.user_id}), {rate_result.remaining_seconds}s remaining")
+                return
+            
+            # Rate limit check passed, process the question
+            await self.handle_mention(message, context)
+            
+        except Exception as e:
+            logger.error(f"Error in rate limit check for {context.username}: {e}")
+            # Fail open - process the question if rate limiting fails
+            await self.handle_mention(message, context)
+
     async def handle_mention(self, message: discord.Message, context: MessageContext):
         """Process @racha mentions with concurrent handling."""
         start_time = time.time()
