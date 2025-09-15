@@ -3,6 +3,7 @@ from flask_cors import CORS
 from rag import AskRachaRAG
 from document_scheduler import DocumentUpdateScheduler
 import os
+import sys
 from datetime import datetime
 from llama_index.core import VectorStoreIndex
 
@@ -507,6 +508,7 @@ def trigger_manual_update():
 
 
 if __name__ == '__main__':
+    sys.stdout.reconfigure(encoding='utf-8')
     print("🚀 Starting AskRacha API Server...")
     print("📡 API available at: http://localhost:5000")
     print("🔗 Accepting requests from: http://localhost:3000")
