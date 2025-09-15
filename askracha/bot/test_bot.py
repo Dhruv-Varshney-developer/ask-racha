@@ -200,7 +200,7 @@ class TestDiscordBot:
         discord_bot.api_client.query_rag.return_value = api_response
         
         # Setup message processor response
-        formatted_response = "**Here's what I found:**\n\nTo upload files, use the web interface..."
+        formatted_response = "**Hey! There, here's your answer:**\n\nTo upload files, use the web interface..."
         discord_bot.message_processor.format_response.return_value = formatted_response
         
         with patch.object(discord_bot, '_send_response') as mock_send:
