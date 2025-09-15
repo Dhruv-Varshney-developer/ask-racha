@@ -185,7 +185,7 @@ class TestDiscordRateLimiter:
             allowed=False,
             remaining_seconds=30,
             reset_time=datetime.now() + timedelta(seconds=30),
-            user_id="discord:123456789"
+            user_id="auth:discord:123456789"  # Updated for cross-platform consistency
         )
         self.mock_rate_limiter.get_user_rate_limit_status.return_value = mock_result
         
@@ -193,7 +193,7 @@ class TestDiscordRateLimiter:
         result = self.discord_rate_limiter.get_user_rate_limit_status(discord_user_id)
         
         # Verify rate limiter was called with correct user ID
-        self.mock_rate_limiter.get_user_rate_limit_status.assert_called_once_with("discord:123456789")
+        self.mock_rate_limiter.get_user_rate_limit_status.assert_called_once_with("auth:discord:123456789")
         assert result == mock_result
     
     def test_health_check(self):
