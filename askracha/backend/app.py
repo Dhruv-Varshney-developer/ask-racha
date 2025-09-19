@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from rag import AskRachaRAG
 from document_scheduler import DocumentUpdateScheduler
+from chat_context import ChatContextManager
 import os
 from datetime import datetime
 from llama_index.core import VectorStoreIndex
@@ -15,6 +16,9 @@ rag = None
 
 # Global scheduler instance
 document_scheduler = None
+
+# Global context manager instance
+context_manager = ChatContextManager()
 
 
 def load_default_documents():
@@ -36,7 +40,7 @@ def load_default_documents():
             )
             # Ensure scheduler is started even if we skip loading
             if document_scheduler is None:
-                document_scheduler = DocumentUpdateScheduler(rag)
+                document_scheduler = DocumentUpdateScheduler(rag, context_manager, test_mode=False)
                 document_scheduler.start()
                 print("Document update scheduler started")
             return
@@ -71,7 +75,7 @@ def load_default_documents():
             print(rag.get_status())
             
             # Initialize and start the document scheduler
-            document_scheduler = DocumentUpdateScheduler(rag)
+            document_scheduler = DocumentUpdateScheduler(rag,context_manager)
             document_scheduler.start()
             print("Document update scheduler started")
             
@@ -190,36 +194,94 @@ def load_documents():
             'message': f'Error loading documents: {str(e)}'
         }), 500
     
-@app.route('/api/query', methods=['POST'])
-def query_documents():
-    """Query the RAG system"""
+@app.route('/api/chat/session', methods=['POST'])
+def create_chat_session():
+    """Create a new chat session"""
+    session_id = context_manager.create_session()
+    return jsonify({
+        'success': True,
+        'session_id': session_id
+    })
+
+@app.route('/api/chat/query', methods=['POST'])
+def chat_query():
+    """Handle a chat query with context"""
     global rag
     
     if not rag:
         return jsonify({
             'success': False,
-            'message': 'RAG system not initialized. Please initialize first.'
+            'message': 'RAG system not initialized'
         }), 400
     
-    if not rag.query_engine:
+    data = request.json
+    session_id = data.get('session_id')
+    query = data.get('query')
+    
+    if not session_id or not query:
         return jsonify({
             'success': False,
-            'message': 'No documents loaded. Please load documents first.'
+            'message': 'Missing session_id or query'
         }), 400
     
-    data = request.get_json()
-    question = data.get('question', '').strip()
-    
-    if not question:
+    # Get session
+    session = context_manager.get_session(session_id)
+    if not session:
         return jsonify({
             'success': False,
-            'message': 'No question provided'
+            'message': 'Invalid session_id'
+        }), 404
+    
+    context = context_manager.get_context(session_id)
+    
+    response = rag.query_with_context(query, context)
+    
+    if response['success']:
+        context_manager.add_message(session_id, 'user', query)
+        context_manager.add_message(
+            session_id, 
+            'assistant', 
+            response['response'],
+            {'source_nodes': response.get('source_nodes', [])}
+        )
+    
+    return jsonify(response)
+
+@app.route('/api/debug/sessions', methods=['GET'])
+def debug_sessions():
+    global context_manager
+
+    return jsonify({
+        'total_sessions': len(context_manager.sessions),
+        'sessions': [{
+            'id': session_id,
+            'created_at': session.created_at,
+            'age_seconds': (datetime.now() - datetime.fromisoformat(session.created_at)).total_seconds()
+        } for session_id, session in context_manager.sessions.items()]
+    })
+
+@app.route('/api/query', methods=['POST'])
+def query_documents():
+    """Legacy query endpoint without context"""
+    global rag
+    
+    if not rag:
+        return jsonify({
+            'success': False,
+            'message': 'RAG system not initialized'
+        }), 400
+    
+    data = request.json
+    query = data.get('query')
+    
+    if not query:
+        return jsonify({
+            'success': False,
+            'message': 'No query provided'
         }), 400
     
     try:
-        print(f"🤔 Processing query: {question[:100]}...")
-        result = rag.query(question)
-        
+        result = rag.query(query)
         if result['success']:
             print(f"✅ Query processed successfully")
         else:
