@@ -183,14 +183,18 @@ function ChatMessage({ message }: { message: Message }) {
 </ReactMarkdown>
             </div>
 
-            {message.sources && message.sources.length > 0 && (
+            {(() => {
+              return message.sources && 
+                     Array.isArray(message.sources) && 
+                     message.sources.length > 0 && 
+                     message.sources.some(source => source?.url && source?.title) && (
               <div className="mt-4 pt-4 border-t border-border">
                 <p className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                   <ExternalLink className="w-4 h-4" />
                   Sources:
                 </p>
                 <div className="space-y-2">
-                  {message.sources.map((source, idx) => (
+                  {message.sources?.map((source, idx) => source?.url && source?.title && (
                     <a
                       key={idx}
                       href={source.url}
@@ -207,7 +211,7 @@ function ChatMessage({ message }: { message: Message }) {
                   ))}
                 </div>
               </div>
-            )}
+            )})()}
           </div>
         </div>
       </div>

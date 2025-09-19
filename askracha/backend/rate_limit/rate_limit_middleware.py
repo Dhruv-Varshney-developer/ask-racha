@@ -6,8 +6,8 @@ import logging
 from functools import wraps
 from typing import Optional, Dict, Any, Callable
 from flask import Flask, request, jsonify, g, Response
-from rate_limiter import get_rate_limiter, RateLimitResult
-from cross_platform_user_mapper import get_user_mapper
+from .rate_limiter import get_rate_limiter, RateLimitResult
+from .cross_platform_user_mapper import get_user_mapper
 
 
 # Configure logging
@@ -23,7 +23,9 @@ class RateLimitMiddleware:
         self.rate_limiter = get_rate_limiter()
         self.user_mapper = get_user_mapper()
         self.rate_limited_endpoints = {
-            'query_documents',  # /api/query endpoint
+            'query_documents',
+            'create_chat_session',
+            'chat_query',
         }
         
         if app is not None:

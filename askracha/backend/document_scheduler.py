@@ -10,21 +10,53 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class DocumentUpdateScheduler:
-    """Scheduler for automatic monthly document updates"""
+    """Scheduler for automatic document updates and session cleanup"""
     
-    def __init__(self, rag_instance=None):
+    def __init__(self, rag_instance=None, context_manager=None, test_mode=False):
         self.rag = rag_instance
+        self.context_manager = context_manager
         self.scheduler = BackgroundScheduler()
         self.scheduler.add_listener(self._job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
         self.is_running = False
+        self.test_mode = test_mode
+        # In test mode: 1 minute interval, 2 minutes expiry
+        self.cleanup_interval = 1 if test_mode else 15  # minutes
+        self.session_expiry = 120 if test_mode else 10800  # 2 mins or 3 hours in seconds
         
     def set_rag_instance(self, rag_instance):
         """Set the RAG instance for document updates"""
         self.rag = rag_instance
         logger.info("RAG instance set for document scheduler")
+        
+    def set_context_manager(self, context_manager):
+        """Set the context manager for session cleanup"""
+        self.context_manager = context_manager
+        logger.info("Context manager set for session cleanup")
+        
+    def cleanup_old_sessions(self):
+        """Remove sessions older than 3 hours"""
+        if not self.context_manager:
+            logger.warning("No context manager set for cleanup")
+            return
+            
+        current_time = datetime.now()
+        sessions_to_remove = []
+        
+        for session_id, session in self.context_manager.sessions.items():
+            created_time = datetime.fromisoformat(session.created_at)
+            age = (current_time - created_time).total_seconds()
+            
+            if age > self.session_expiry:
+                sessions_to_remove.append(session_id)
+        
+        for session_id in sessions_to_remove:
+            del self.context_manager.sessions[session_id]
+        
+        if sessions_to_remove:
+            logger.info(f"Cleaned up {len(sessions_to_remove)} sessions older than 3 hours")
     
     def start(self):
-        """Start the scheduler"""
+        """Start the scheduler with both document updates and session cleanup"""
         if not self.is_running:
             try:
                 # Schedule monthly document update (1st of month at 2:00 AM)
@@ -45,9 +77,17 @@ class DocumentUpdateScheduler:
                     replace_existing=True
                 )
                 
+                # Schedule session cleanup every 15 minutes
+                self.scheduler.add_job(
+                    self.cleanup_old_sessions,
+                    'interval',
+                    minutes=self.cleanup_interval,
+                    id='session_cleanup'
+                )
+                
                 self.scheduler.start()
                 self.is_running = True
-                logger.info("Document update scheduler started successfully")
+                logger.info("Scheduler started with document updates and session cleanup")
                 logger.info("Monthly updates scheduled for 1st of month at 2:00 AM")
                 logger.info("Weekly health checks scheduled for Sundays at 3:00 AM")
                 
