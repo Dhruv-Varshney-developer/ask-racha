@@ -9,8 +9,13 @@ from datetime import datetime
 from llama_index.core import VectorStoreIndex
 
 app = Flask(__name__)
-allowed_origins = os.getenv('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
-CORS(app, origins=allowed_origins)
+
+# Enable CORS for all routes
+CORS(app,
+     origins='*',
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     allow_headers=['Content-Type', 'Authorization', 'Accept', 'Origin'],
+     supports_credentials=False)
 
 # Initialize rate limiting middleware
 rate_limit_middleware = create_rate_limit_middleware(app)
@@ -538,6 +543,7 @@ def trigger_manual_update():
 
 if __name__ == '__main__':
     sys.stdout.reconfigure(encoding='utf-8')
+    print("🚀 Version 2")
     print("🚀 Starting AskRacha API Server...")
     print("📡 API available at: http://localhost:5000")
     print("🔗 Accepting requests from: http://localhost:3000")
@@ -552,4 +558,4 @@ if __name__ == '__main__':
     
     load_default_documents()
 
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
