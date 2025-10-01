@@ -12,3 +12,4 @@ lxml
 qdrant-client>=1.7.0
 pytest>=7.0.0
 APScheduler>=3.10.0
+redis>=4.0.0

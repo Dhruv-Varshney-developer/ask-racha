@@ -22,7 +22,7 @@ services:
       - FLASK_ENV=${FLASK_ENV:-development}
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-    command: sh -lc "pip install --no-cache-dir -r requirements.txt && python -u app.py"
+    command: sh -lc "pip install -r requirements.txt && python -u app.py"
     depends_on:
       - qdrant
 
