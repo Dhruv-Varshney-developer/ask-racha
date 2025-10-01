@@ -166,7 +166,18 @@ class APIClient:
             # Parse response according to expected format
             success = response_data.get("success", False)
             answer = response_data.get("answer", "")
-            sources = response_data.get("sources", [])
+            raw_sources = response_data.get("sources", [])
+            
+            # Filter out score from sources
+            sources = []
+            for source in raw_sources:
+                if isinstance(source, dict):
+                    # Create a new dict without the score field
+                    filtered_source = {k: v for k, v in source.items() if k != 'score'}
+                    sources.append(filtered_source)
+                else:
+                    # If source is not a dict, keep it as is
+                    sources.append(source)
             
             if success and answer:
                 logger.info(f"Successfully received answer from API (response time: {response_time:.2f}s)")
