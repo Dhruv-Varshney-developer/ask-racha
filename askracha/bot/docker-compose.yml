@@ -1,6 +1,30 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: askracha-redis
+    restart: unless-stopped
+    networks:
+      - bot-network
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
   discord-bot:
     build:
       context: .
@@ -12,6 +36,12 @@ services:
     environment:
       # Override or set additional environment variables here if needed
       - PYTHONUNBUFFERED=1
+      # Redis connection (use service name as hostname)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
     # Uncomment if you need to connect to other services on the host
     # network_mode: host
     # Or use a custom network
@@ -36,3 +66,7 @@ services:
 networks:
   bot-network:
     driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
