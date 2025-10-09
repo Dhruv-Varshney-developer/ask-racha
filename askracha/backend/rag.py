@@ -594,6 +594,85 @@ class AskRachaRAG:
             'document_sources': [doc.metadata.get('source', 'Unknown') for doc in self.documents] if self.documents else []
         }
 
+    def query_with_context(self, query: str, context: List[Dict]) -> Dict:
+        """
+        Generate a response considering the conversation context
+        """
+        try:
+            conversation_context = "\n".join([
+                f"{msg['role']}: {msg['content']}"
+                for msg in context
+            ])
+            
+            enhanced_prompt = f"""Previous conversation:
+{conversation_context}
+
+Current question: {query}
+
+Analyze the context and question, then provide:
+1. A decision on whether sources should be shown (true/false) based on:
+   - If the response references technical information
+   - If sources were actually used to generate the response
+   - If the response builds on or clarifies previous technical information
+   - Don't show sources for simple acknowledgments unless they relate to technical content
+
+2. A response that:
+   - Is consistent with the previous conversation
+   - Answers the question directly
+   - Uses simple language for basic questions
+   - Provides detailed technical information only when necessary
+
+Format your response as:
+<show_sources>true/false</show_sources>
+<response>Your actual response here</response>
+"""
+            
+            response = self.query_engine.query(enhanced_prompt)
+            response_text = str(response)
+            
+            response_text = str(response)
+            
+            show_sources = True  
+            if '<show_sources>' in response_text and '</show_sources>' in response_text:
+                show_sources_text = response_text.split('<show_sources>')[1].split('</show_sources>')[0].strip().lower()
+                show_sources = show_sources_text == 'true'
+                
+            if '<response>' in response_text and '</response>' in response_text:
+                response_text = response_text.split('<response>')[1].split('</response>')[0].strip()
+                
+            if not show_sources:
+                return {
+                    "success": True,
+                    "response": response_text,
+                    "source_nodes": []
+                }
+
+            source_nodes = []
+            if hasattr(response, 'source_nodes'):
+                for node in response.source_nodes:
+                    if hasattr(node, 'score') and float(node.score) > 0.5:
+                        source = {
+                            'url': node.metadata.get('source', '') if hasattr(node, 'metadata') else '',
+                            'title': node.metadata.get('title', 'Documentation') if hasattr(node, 'metadata') else 'Documentation',
+                            'score': float(node.score)
+                        }
+                        if source['url'] and source['title']:
+                            source_nodes.append(source)
+
+            result = {
+                "success": True,
+                "response": response_text,
+                "source_nodes": source_nodes
+            }
+            print("DEBUG: Final response with sources:", result)
+            return result
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error generating response: {str(e)}"
+            }
+            
     def test_connection(self) -> Dict:
         """Test the Gemini API connection"""
         try:

@@ -61,6 +61,17 @@ class CrossPlatformUserMapper:
         Returns:
             UserIdentity object
         """
+        # Strategy 0: Prefer explicit chat context id for session-scoped rate limiting
+        context_id = request_headers.get('X-Chat-Context-Id')
+        if context_id:
+            unified_id = f"chat:{context_id}"
+            return UserIdentity(
+                platform='web',
+                platform_user_id=context_id,
+                unified_user_id=unified_id,
+                user_type='authenticated'
+            )
+
         # Strategy 1: Check for authenticated user
         user_id = request_headers.get('X-User-ID')
         if user_id:

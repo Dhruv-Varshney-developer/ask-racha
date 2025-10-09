@@ -61,9 +61,93 @@ class DiscordBot(commands.Bot):
         self.metrics = BotMetrics()
         self._reconnect_attempts = 0
         self._max_reconnect_attempts = 5
+        self.channel_sessions: dict[int, str] = {}
         
         logger.info("Discord bot client initialized with rate limiting")
     
+    def _is_bot_mentioned(self, message: discord.Message) -> bool:
+        """Return True if the bot user or its managed role is mentioned in the message."""
+        try:
+            if self.user in getattr(message, 'mentions', []):
+                return True
+            
+            for role in getattr(message, 'role_mentions', []) or []:
+                tags = getattr(role, 'tags', None)
+                bot_id = getattr(tags, 'bot_id', None) if tags else None
+                if bot_id and int(bot_id) == self.user.id:
+                    return True
+        except Exception:
+            return False
+        return False
+    
+    async def _get_or_create_session(self, channel_id: int) -> Optional[str]:
+        """Return cached session_id for channel or create a new one via API."""
+        session_id = self.channel_sessions.get(channel_id)
+        if session_id:
+            return session_id
+        new_session = await self.api_client.create_chat_session({"channel_id": str(channel_id)})
+        if new_session:
+            self.channel_sessions[channel_id] = new_session
+            logger.debug(f"Created new chat session for channel {channel_id}: {new_session}")
+            return new_session
+        logger.warning(f"Failed to create chat session for channel {channel_id}")
+        return None
+
+    async def _answer_with_chat_or_legacy(self, message: discord.Message, question: str) -> None:
+        """Answer using chat context if enabled, otherwise legacy; with graceful fallback."""
+        channel_id = message.channel.id
+        use_context = getattr(self.config, 'use_chat_context', False)
+
+        if not use_context:
+            api_response = await self.api_client.query_rag(question)
+            if api_response.success:
+                await self._send_response(message, self.message_processor.format_response({
+                    'success': True,
+                    'answer': api_response.answer,
+                    'sources': api_response.sources,
+                }))
+            else:
+                await self._send_response(message, self._get_error_response(api_response.error_message))
+            return
+
+        session_id = await self._get_or_create_session(channel_id)
+        if session_id:
+            api_response = await self.api_client.chat_query(session_id, question)
+            if api_response.success:
+                await self._send_response(message, self.message_processor.format_response({
+                    'success': True,
+                    'answer': api_response.answer,
+                    'sources': api_response.sources,
+                }))
+                return
+            if api_response.error_message and (
+                'invalid session' in api_response.error_message.lower() or
+                'missing session' in api_response.error_message.lower()
+            ):
+                logger.info(f"Session invalid for channel {channel_id}, recreating...")
+                self.channel_sessions.pop(channel_id, None)
+                session_id = await self._get_or_create_session(channel_id)
+                if session_id:
+                    retry_resp = await self.api_client.chat_query(session_id, question)
+                    if retry_resp.success:
+                        await self._send_response(message, self.message_processor.format_response({
+                            'success': True,
+                            'answer': retry_resp.answer,
+                            'sources': retry_resp.sources,
+                        }))
+                        return
+                    logger.warning(f"chat_query retry failed: {retry_resp.error_message}")
+
+        legacy_resp = await self.api_client.query_rag(question)
+        if legacy_resp.success:
+            await self._send_response(message, self.message_processor.format_response({
+                'success': True,
+                'answer': legacy_resp.answer,
+                'sources': legacy_resp.sources,
+            }))
+        else:
+            await self._send_response(message, self._get_error_response(legacy_resp.error_message))
+
     async def setup_hook(self):
         """Called when the bot is starting up."""
         logger.info("Setting up Discord bot...")
@@ -114,8 +198,8 @@ class DiscordBot(commands.Bot):
         if message.author.bot:
             return
         
-        # Check if the bot is mentioned
-        if self.user not in message.mentions:
+        if not self._is_bot_mentioned(message):
+            logger.debug("Message ignored: bot not mentioned (no user or managed role mention)")
             return
         
         logger.debug(f"Received mention from {message.author} in {message.guild.name if message.guild else 'DM'}")
@@ -174,32 +258,7 @@ class DiscordBot(commands.Bot):
             
             # Show typing indicator while processing
             async with message.channel.typing():
-                # Query the API
-                api_response = await self.api_client.query_rag(context.question)
-                
-                # Format the response
-                if api_response.success:
-                    formatted_response = self.message_processor.format_response({
-                        'success': True,
-                        'answer': api_response.answer,
-                        'sources': api_response.sources
-                    })
-                    
-                    # Send successful response
-                    await self._send_response(message, formatted_response)
-                    
-                    # Update metrics
-                    self.metrics.successful_responses += 1
-                    logger.info(f"Successfully responded to {context.username} (API time: {api_response.response_time:.2f}s)")
-                    
-                else:
-                    # Handle API errors gracefully
-                    error_response = self._get_error_response(api_response.error_message)
-                    await self._send_response(message, error_response)
-                    
-                    # Update metrics
-                    self.metrics.failed_responses += 1
-                    logger.warning(f"Failed to respond to {context.username}: {api_response.error_message}")
+                await self._answer_with_chat_or_legacy(message, context.question)
         
         except discord.HTTPException as e:
             logger.error(f"Discord API error while responding to {context.username}: {e}")
