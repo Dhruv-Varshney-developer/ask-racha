@@ -32,9 +32,8 @@ RUN useradd -m -u 1000 botuser && \
 # Switch to non-root user
 USER botuser
 
-# Health check (optional - checks if the process is running)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -f "python.*main.py" || exit 1
+# Expose health check port
+EXPOSE 8000
 
 # Run the bot
 CMD ["python", "main.py"]
