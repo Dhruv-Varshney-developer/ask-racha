@@ -36,9 +36,8 @@ services:
     environment:
       # Override or set additional environment variables here if needed
       - PYTHONUNBUFFERED=1
-      # Redis connection (use service name as hostname)
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      # Redis connection URL (use service name as hostname)
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       redis:
         condition: service_healthy

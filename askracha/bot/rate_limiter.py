@@ -22,22 +22,31 @@ logger = logging.getLogger(__name__)
 class RateLimitConfig:
     """Configuration for rate limiting parameters."""
     default_limit_seconds: int = 60  # Default 60-second rate limit
-    redis_host: str = "localhost"
-    redis_port: int = 6379
-    redis_db: int = 0
-    redis_password: Optional[str] = None
+    redis_url: str = "redis://localhost:6379/0"
     redis_max_connections: int = 10
     key_prefix: str = "askracha:ratelimit"
     
     @classmethod
     def from_env(cls) -> 'RateLimitConfig':
         """Create configuration from environment variables."""
+        # Check for REDIS_URL first, otherwise build from individual components for backward compatibility
+        redis_url = os.getenv('REDIS_URL')
+        
+        if not redis_url:
+            # Build URL from individual components (backward compatibility)
+            redis_host = os.getenv('REDIS_HOST', 'localhost')
+            redis_port = os.getenv('REDIS_PORT', '6379')
+            redis_db = os.getenv('REDIS_DB', '0')
+            redis_password = os.getenv('REDIS_PASSWORD')
+            
+            if redis_password:
+                redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}"
+            else:
+                redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
+        
         return cls(
             default_limit_seconds=int(os.getenv('RATE_LIMIT_SECONDS', '60')),
-            redis_host=os.getenv('REDIS_HOST', 'localhost'),
-            redis_port=int(os.getenv('REDIS_PORT', '6379')),
-            redis_db=int(os.getenv('REDIS_DB', '0')),
-            redis_password=os.getenv('REDIS_PASSWORD'),
+            redis_url=redis_url,
             redis_max_connections=int(os.getenv('REDIS_MAX_CONNECTIONS', '10')),
             key_prefix=os.getenv('RATE_LIMIT_KEY_PREFIX', 'askracha:ratelimit')
         )
@@ -74,11 +83,8 @@ class RateLimiter:
         """Get Redis client with connection pooling."""
         if self._redis_client is None:
             if self._redis_pool is None:
-                self._redis_pool = ConnectionPool(
-                    host=self.config.redis_host,
-                    port=self.config.redis_port,
-                    db=self.config.redis_db,
-                    password=self.config.redis_password,
+                self._redis_pool = ConnectionPool.from_url(
+                    self.config.redis_url,
                     max_connections=self.config.redis_max_connections,
                     decode_responses=True
                 )
