@@ -19,6 +19,7 @@ class BotConfig:
     log_level: str
     retry_attempts: int
     retry_delay: float
+    use_chat_context: bool
 
 
 class ConfigurationError(Exception):
@@ -40,6 +41,12 @@ def load_config() -> BotConfig:
     discord_token = os.getenv('DISCORD_TOKEN')
     if not discord_token:
         raise ConfigurationError("DISCORD_TOKEN environment variable is required")
+    discord_token = discord_token.strip()
+    if discord_token.count('.') != 2:
+        raise ConfigurationError(
+            "DISCORD_TOKEN appears malformed. Make sure you copied the Bot Token from the Discord Developer Portal "
+            "(Bot tab -> Reset Token -> Copy). It should contain two dots (format like 'aaa.bbb.ccc')."
+        )
     
     # Optional configuration with defaults
     askracha_api_url = os.getenv('ASKRACHA_API_URL', 'http://localhost:5000')
@@ -83,6 +90,9 @@ def load_config() -> BotConfig:
     if not askracha_api_url.startswith(('http://', 'https://')):
         raise ConfigurationError("ASKRACHA_API_URL must start with http:// or https://")
     
+    use_chat_context_env = os.getenv('USE_CHAT_CONTEXT', 'true').strip().lower()
+    use_chat_context = use_chat_context_env in ('1', 'true', 'yes', 'y')
+
     logger.info("Configuration loaded successfully")
     logger.debug(f"API URL: {askracha_api_url}")
     logger.debug(f"API Timeout: {api_timeout}s")
@@ -97,7 +107,8 @@ def load_config() -> BotConfig:
         max_response_length=max_response_length,
         log_level=log_level,
         retry_attempts=retry_attempts,
-        retry_delay=retry_delay
+        retry_delay=retry_delay,
+        use_chat_context=use_chat_context
     )
 
 

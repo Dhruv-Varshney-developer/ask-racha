@@ -13,8 +13,8 @@ import discord
 backend_dir = Path(__file__).parent.parent / 'backend'
 sys.path.insert(0, str(backend_dir))
 
-from rate_limiter import get_rate_limiter, RateLimitResult
-from cross_platform_user_mapper import get_user_mapper
+from rate_limit.rate_limiter import get_rate_limiter, RateLimitResult
+from rate_limit.cross_platform_user_mapper import get_user_mapper
 
 
 logger = logging.getLogger(__name__)

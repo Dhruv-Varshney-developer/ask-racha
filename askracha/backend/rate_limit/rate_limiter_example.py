@@ -3,7 +3,7 @@ Example usage of the RateLimiter class.
 This demonstrates how to use the rate limiting functionality.
 """
 import time
-from rate_limiter import RateLimiter, RateLimitConfig, get_rate_limiter
+from .rate_limiter import RateLimiter, RateLimitConfig, get_rate_limiter
 
 
 def main():
