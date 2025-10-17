@@ -3,18 +3,14 @@ Discord bot rate limiting integration.
 Provides rate limiting functionality specifically for Discord bot interactions.
 """
 import logging
-import sys
-from pathlib import Path
 from typing import Optional
 from datetime import datetime
 import discord
 
-# Add backend directory to path to import rate limiter
-backend_dir = Path(__file__).parent.parent / 'backend'
-sys.path.insert(0, str(backend_dir))
+from rate_limiter import get_rate_limiter, RateLimitResult
+from cross_platform_user_mapper import get_user_mapper
 
-from rate_limit.rate_limiter import get_rate_limiter, RateLimitResult
-from rate_limit.cross_platform_user_mapper import get_user_mapper
+
 
 
 logger = logging.getLogger(__name__)

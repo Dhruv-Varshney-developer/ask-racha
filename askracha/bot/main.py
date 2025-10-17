@@ -5,6 +5,7 @@ import asyncio
 import logging
 import sys
 import signal
+import os
 from pathlib import Path
 
 # Add the bot directory to Python path
@@ -16,6 +17,7 @@ from logger import setup_logging
 from api_client import APIClient
 from message_processor import MessageProcessor
 from bot import DiscordBot
+from health_server import HealthCheckServer
 
 
 class BotRunner:
@@ -23,6 +25,7 @@ class BotRunner:
     
     def __init__(self):
         self.bot = None
+        self.health_server = None
         self.shutdown_event = asyncio.Event()
     
     def signal_handler(self, signum, frame):
@@ -73,6 +76,10 @@ class BotRunner:
             # Initialize Discord bot
             self.bot = DiscordBot(config, api_client, message_processor)
             
+            # Initialize health check server
+            health_port = int(os.getenv('PORT', '8000'))
+            self.health_server = HealthCheckServer(port=health_port)
+            
             logger.info("✅ Bot components initialized")
             logger.info("🚀 Starting Discord bot...")
             
@@ -80,6 +87,9 @@ class BotRunner:
             if sys.platform != 'win32':
                 signal.signal(signal.SIGINT, self.signal_handler)
                 signal.signal(signal.SIGTERM, self.signal_handler)
+            
+            # Start health check server
+            await self.health_server.start()
             
             # Start the bot
             bot_task = asyncio.create_task(self.bot.start_bot())
@@ -117,6 +127,12 @@ class BotRunner:
             return 1
         finally:
             # Ensure graceful cleanup
+            if self.health_server:
+                try:
+                    await self.health_server.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping health server: {e}")
+            
             if self.bot:
                 try:
                     await self.bot.close_bot()
