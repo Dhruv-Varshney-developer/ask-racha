@@ -1,13 +1,20 @@
+export interface ChatSession {
+    session_id: string;
+    created_at: string;
+    last_active: string;
+}
+
 export interface Message {
-    id: string
-    type: "user" | "assistant"
-    content: string
-    timestamp: Date
+    id: string;
+    type: "user" | "assistant";
+    content: string;
+    timestamp: Date;
     sources?: Array<{
-        url: string
-        title: string
-        score: number
-    }>
+        url: string;
+        title: string;
+        score: number;
+    }>;
+    metadata?: Record<string, any>;
 }
 
 export interface SystemStatus {

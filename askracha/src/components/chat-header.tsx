@@ -8,12 +8,14 @@ interface ChatHeaderProps {
   onMenuClick: () => void;
   status: SystemStatus | null;
   isInitialized: boolean;
+  children?: React.ReactNode;
 }
 
 export function ChatHeader({
   onMenuClick,
   status,
   isInitialized,
+  children,
 }: ChatHeaderProps) {
   return (
     <header className="border-b  bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -63,6 +65,7 @@ export function ChatHeader({
             )}
           </div>
 
+          {children}
           <ThemeToggle />
         </div>
       </div>
