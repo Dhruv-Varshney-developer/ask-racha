@@ -6,11 +6,16 @@ import { ChatSidebar } from "./chat-sidebar";
 import { ChatMessages } from "./chat-messages";
 import { ChatInput } from "./chat-input";
 import { WelcomeScreen } from "./welcome-screen";
+import { ChatSessionNav } from "./chat-session-nav";
 import { useChat } from "@/hooks/use-chat";
 import { useSystemStatus } from "@/hooks/use-system-status";
-import { useTheme } from "next-themes"; // Import useTheme
+import { useTheme } from "next-themes";
 
-export function AskRachaChat() {
+interface AskRachaChatProps {
+  initialSessionId?: string;
+}
+
+export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {
     messages,
@@ -77,7 +82,9 @@ export function AskRachaChat() {
           onMenuClick={() => setSidebarOpen(true)}
           status={status}
           isInitialized={isInitialized}
-        />
+        >
+          <ChatSessionNav />
+        </ChatHeader>
 
         {/* Content area that holds messages or welcome screen */}
         <div className="flex-1 overflow-x-hidden max-w-full">

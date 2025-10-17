@@ -7,6 +7,8 @@ import re
 from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime
+from html import unescape
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,37 @@ class MessageProcessor:
         """Initialize the message processor."""
         self.max_response_length = max_response_length
         logger.info(f"Message processor initialized with max length {max_response_length}")
+    
+    def _strip_html(self, text: str) -> str:
+        """Remove HTML tags from text and unescape HTML entities."""
+        if not text:
+            return ""
+        text = unescape(text)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = " ".join(text.split())
+        return text
+    
+    def _escape_markdown(self, text: str) -> str:
+        """Escape Markdown characters that can break Discord formatting."""
+        if not text:
+            return ""
+
+        specials = r"\\`*_{}[]()#+!|>"
+        return re.sub(f"([${specials}])", r"\\\1", text)
+    
+    def _normalize_url(self, url: str) -> Optional[str]:
+        """Return URL if it has a scheme/host; otherwise None to avoid broken links."""
+        if not url:
+            return None
+        parsed = urlparse(url)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            return url
+        if not parsed.scheme and parsed.path:
+            candidate = "https://" + parsed.path
+            p2 = urlparse(candidate)
+            if p2.scheme and p2.netloc:
+                return candidate
+        return None
     
     def extract_question(self, message_content: str) -> Optional[str]:
         """
@@ -90,18 +123,25 @@ class MessageProcessor:
             for i, source in enumerate(sources[:3], 1):  # Limit to 3 sources
                 if isinstance(source, dict):
                     # Format source with Discord markdown
-                    title = source.get('title', 'Untitled')
-                    url = source.get('url', '')
-                    snippet = source.get('snippet', '')
+                    raw_title = source.get('title', 'Untitled')
+                    raw_url = source.get('url', '')
+                    raw_snippet = source.get('snippet', '')
                     
-                    # Clean up snippet - take first 100 chars and remove newlines
-                    if snippet:
-                        snippet = ' '.join(snippet.split())[:100] + "..."
+                    clean_title = self._escape_markdown(self._strip_html(raw_title)) or 'Untitled'
+                    clean_snippet = self._escape_markdown(self._strip_html(raw_snippet))
+                    if clean_snippet:
+                        max_len = 140
+                        if len(clean_snippet) > max_len:
+                            clean_snippet = clean_snippet[:max_len].rstrip() + "..."
                     
-                    # Format as Discord embed-style markdown
-                    formatted_response += f"\n\n**{i}.** [{title}]({url})"
-                    if snippet:
-                        formatted_response += f"\n> {snippet}"
+                    safe_url = self._normalize_url(raw_url)
+                    
+                    if safe_url:
+                        formatted_response += f"\n\n**{i}.** [{clean_title}]({safe_url})"
+                    else:
+                        formatted_response += f"\n\n**{i}.** {clean_title}"
+                    if clean_snippet:
+                        formatted_response += f"\n> {clean_snippet}"
                 else:
                     # Fallback for non-dict sources
                     formatted_response += f"\n{i}. {source}"

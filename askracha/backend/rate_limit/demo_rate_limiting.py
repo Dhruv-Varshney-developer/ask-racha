@@ -3,7 +3,20 @@ Demo script to show rate limiting functionality.
 """
 import json
 import time
-from app import app
+import os
+import sys
+
+# Support running as a module: `python -m askracha.backend.rate_limit.demo_rate_limiting`
+try:
+    from ..app import app  # type: ignore
+except ImportError:
+    # Support running directly: `python demo_rate_limiting.py`
+    # Add the backend directory to sys.path so `from app import app` works
+    current_dir = os.path.dirname(__file__)
+    backend_dir = os.path.dirname(current_dir)
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+    from app import app
 
 
 def demo_rate_limiting():

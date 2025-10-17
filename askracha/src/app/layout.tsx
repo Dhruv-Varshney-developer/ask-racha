@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css"; // Your merged CSS file
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "sonner";
 import ClarityAnalytics from "@/components/analytics/ClarityAnalytics";
 import ClientClarityWrapper from "@/components/analytics/ClientClarityWrapper";
 
@@ -38,6 +39,7 @@ export default function RootLayout({
           themes={["light", "dark", "storacha"]}
         >
           {children}
+          <Toaster position="top-center" />
         </ThemeProvider>
         <ClarityAnalytics />
         <ClientClarityWrapper />

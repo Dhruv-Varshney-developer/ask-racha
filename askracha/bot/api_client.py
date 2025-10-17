@@ -158,7 +158,7 @@ class APIClient:
         try:
             logger.info(f"Querying RAG API with question: {question[:100]}...")
             
-            request_data = {"question": question.strip()}
+            request_data = {"query": question.strip()}
             response_data = await self._make_request("/api/query", request_data)
             
             response_time = time.time() - start_time
@@ -188,7 +188,8 @@ class APIClient:
                     response_time=response_time
                 )
             else:
-                error_msg = response_data.get("error", "API returned unsuccessful response")
+                # Backend often returns 'message' on errors
+                error_msg = response_data.get("error") or response_data.get("message", "API returned unsuccessful response")
                 logger.warning(f"API returned unsuccessful response: {error_msg}")
                 return APIResponse(
                     success=False,
@@ -252,6 +253,56 @@ class APIClient:
                 response_time=response_time,
                 error_message=f"Unexpected error: {str(e)}"
             )
+
+    async def create_chat_session(self, metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Create a new chat session and return its session_id, or None on failure."""
+        try:
+            payload = metadata or {}
+            data = await self._make_request("/api/chat/session", payload, timeout=min(5, self.timeout))
+            if data.get("success") and data.get("session_id"):
+                return data["session_id"]
+            logger.warning(f"Failed to create chat session: {data}")
+            return None
+        except Exception as e:
+            logger.warning(f"Chat session creation failed: {e}")
+            return None
+
+    async def chat_query(self, session_id: str, question: str) -> APIResponse:
+        """Send a contextual query to /api/chat/query and map response to APIResponse."""
+        if not question or not question.strip():
+            return APIResponse(False, "", [], 0.0, "Empty question provided")
+        start_time = time.time()
+        try:
+            payload = {"session_id": session_id, "query": question.strip()}
+            data = await self._make_request("/api/chat/query", payload)
+            response_time = time.time() - start_time
+
+            success = data.get("success", False)
+            answer = data.get("response") or data.get("answer", "")
+            raw_sources = data.get("source_nodes") or data.get("sources", [])
+            sources: list = []
+            for s in raw_sources or []:
+                if isinstance(s, dict):
+                    title = s.get("title") or s.get("node_title") or s.get("document_title") or "Untitled"
+                    url = s.get("url") or s.get("link") or s.get("source_url") or ""
+                    snippet = s.get("snippet") or s.get("text") or s.get("content") or ""
+                    sources.append({"title": title, "url": url, "snippet": snippet})
+                else:
+                    sources.append(s)
+
+            if success and answer:
+                return APIResponse(True, answer, sources, response_time)
+
+            error_msg = data.get("error") or data.get("message", "API returned unsuccessful response")
+            return APIResponse(False, "", [], response_time, error_message=error_msg)
+
+        except asyncio.TimeoutError:
+            response_time = time.time() - start_time
+            return APIResponse(False, "", [], response_time, error_message="Request timed out")
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error(f"Unexpected error during chat_query: {e}")
+            return APIResponse(False, "", [], response_time, error_message=f"Unexpected error: {e}")
     
     async def health_check(self) -> bool:
         """
@@ -263,9 +314,9 @@ class APIClient:
         try:
             logger.debug("Performing API health check")
             
-            # Use a simple test question for health check
+            # Use a simple test query for health check (backend expects 'query')
             test_question = "health check"
-            request_data = {"question": test_question}
+            request_data = {"query": test_question}
             
             # Use shorter timeout for health check
             health_check_timeout = min(5, self.timeout)
