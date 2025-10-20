@@ -282,12 +282,12 @@ def query_documents():
         }), 400
     
     data = request.json
-    query = data.get('query')
+    query = data.get('question')
     
     if not query:
         return jsonify({
             'success': False,
-            'message': 'No query provided'
+            'message': 'No question provided'
         }), 400
     
     try:
