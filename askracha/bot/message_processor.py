@@ -113,44 +113,8 @@ class MessageProcessor:
             logger.warning("API response missing answer content")
             return "I couldn't find a good answer to your question. Could you try rephrasing it? 🤔"
         
-        # Format the response with Discord markdown
-        formatted_response = f"**Hey! There, here's your answer:**\n\n{answer}"
-        
-        # Add sources if available
-        sources = api_response.get('sources', [])
-        if sources:
-            formatted_response += "\n\n**📚 Sources:**"
-            for i, source in enumerate(sources[:3], 1):  # Limit to 3 sources
-                if isinstance(source, dict):
-                    # Format source with Discord markdown
-                    raw_title = source.get('title', 'Untitled')
-                    raw_url = source.get('url', '')
-                    raw_snippet = source.get('snippet', '')
-                    
-                    clean_title = self._escape_markdown(self._strip_html(raw_title)) or 'Untitled'
-                    clean_snippet = self._escape_markdown(self._strip_html(raw_snippet))
-                    if clean_snippet:
-                        max_len = 140
-                        if len(clean_snippet) > max_len:
-                            clean_snippet = clean_snippet[:max_len].rstrip() + "..."
-                    
-                    safe_url = self._normalize_url(raw_url)
-                    
-                    if safe_url:
-                        formatted_response += f"\n\n**{i}.** [{clean_title}]({safe_url})"
-                    else:
-                        formatted_response += f"\n\n**{i}.** {clean_title}"
-                    if clean_snippet:
-                        formatted_response += f"\n> {clean_snippet}"
-                else:
-                    # Fallback for non-dict sources
-                    formatted_response += f"\n{i}. {source}"
-        
-        # Add AI indicator
-        formatted_response += "\n\n*🤖 AskRacha Bot by Storacha*"
-        
         # Truncate if necessary
-        formatted_response = self.truncate_response(formatted_response)
+        formatted_response = self.truncate_response(answer)
         
         logger.debug(f"Formatted response length: {len(formatted_response)}")
         return formatted_response
