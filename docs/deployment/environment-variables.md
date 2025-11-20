@@ -61,9 +61,10 @@ Complete reference for all environment variables used in the AskRacha system.
 - **Required**: Yes
 - **Description**: Discord bot authentication token
 - **Where to get**: [Discord Developer Portal](https://discord.com/developers/applications) → Your App → Bot → Token
-- **Example**: `DISCORD_BOT_TOKEN`
+- **Example**: `YOUR_DISCORD_BOT_TOKEN`
 - **Notes**: 
   - Keep this secret and never commit to version control
+  - Treat tokens like passwords—store them only in environment variables or secure secret managers
   - Regenerate if compromised
   - Must enable Message Content Intent in Discord Portal
 
