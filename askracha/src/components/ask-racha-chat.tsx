@@ -37,7 +37,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
 
   const suggestions = [
     "What is Storacha and how does it work?",
-    "How do I get started with the w3up client?",
+    "How do I get started with the storacha client?",
     "What are the main concepts in Storacha?",
     "How do I upload files to Storacha?",
     "What are the pricing plans for Storacha?",
