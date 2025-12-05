@@ -28,19 +28,33 @@ class RateLimitConfig:
     redis_password: Optional[str] = None
     redis_max_connections: int = 10
     key_prefix: str = "askracha:ratelimit"
+    redis_url: Optional[str] = None  # Support for Redis URL
     
     @classmethod
     def from_env(cls) -> 'RateLimitConfig':
         """Create configuration from environment variables."""
-        return cls(
-            default_limit_seconds=int(os.getenv('RATE_LIMIT_SECONDS', '60')),
-            redis_host=os.getenv('REDIS_HOST', 'localhost'),
-            redis_port=int(os.getenv('REDIS_PORT', '6379')),
-            redis_db=int(os.getenv('REDIS_DB', '0')),
-            redis_password=os.getenv('REDIS_PASSWORD'),
-            redis_max_connections=int(os.getenv('REDIS_MAX_CONNECTIONS', '10')),
-            key_prefix=os.getenv('RATE_LIMIT_KEY_PREFIX', 'askracha:ratelimit')
-        )
+        # Check if REDIS_URL is provided (takes precedence)
+        redis_url = os.getenv('REDIS_URL')
+        
+        if redis_url:
+            # Use Redis URL if provided
+            return cls(
+                default_limit_seconds=int(os.getenv('RATE_LIMIT_SECONDS', '60')),
+                redis_url=redis_url,
+                redis_max_connections=int(os.getenv('REDIS_MAX_CONNECTIONS', '10')),
+                key_prefix=os.getenv('RATE_LIMIT_KEY_PREFIX', 'askracha:ratelimit')
+            )
+        else:
+            # Fall back to individual parameters
+            return cls(
+                default_limit_seconds=int(os.getenv('RATE_LIMIT_SECONDS', '60')),
+                redis_host=os.getenv('REDIS_HOST', 'localhost'),
+                redis_port=int(os.getenv('REDIS_PORT', '6379')),
+                redis_db=int(os.getenv('REDIS_DB', '0')),
+                redis_password=os.getenv('REDIS_PASSWORD'),
+                redis_max_connections=int(os.getenv('REDIS_MAX_CONNECTIONS', '10')),
+                key_prefix=os.getenv('RATE_LIMIT_KEY_PREFIX', 'askracha:ratelimit')
+            )
 
 
 @dataclass
@@ -74,14 +88,22 @@ class RateLimiter:
         """Get Redis client with connection pooling."""
         if self._redis_client is None:
             if self._redis_pool is None:
-                self._redis_pool = ConnectionPool(
-                    host=self.config.redis_host,
-                    port=self.config.redis_port,
-                    db=self.config.redis_db,
-                    password=self.config.redis_password,
-                    max_connections=self.config.redis_max_connections,
-                    decode_responses=True
-                )
+                # Use Redis URL if provided, otherwise use individual parameters
+                if self.config.redis_url:
+                    self._redis_pool = ConnectionPool.from_url(
+                        self.config.redis_url,
+                        max_connections=self.config.redis_max_connections,
+                        decode_responses=True
+                    )
+                else:
+                    self._redis_pool = ConnectionPool(
+                        host=self.config.redis_host,
+                        port=self.config.redis_port,
+                        db=self.config.redis_db,
+                        password=self.config.redis_password,
+                        max_connections=self.config.redis_max_connections,
+                        decode_responses=True
+                    )
             self._redis_client = redis.Redis(connection_pool=self._redis_pool)
         return self._redis_client
     
