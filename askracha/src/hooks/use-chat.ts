@@ -120,7 +120,14 @@ export function useChat({ initialSessionId }: { initialSessionId?: string } = {}
                 if (data.success) {
                     addMessage("assistant", data.response, data.source_nodes)
                 } else {
-                    addMessage("assistant", `I encountered an issue: ${data.message}`)
+                    // Check if it's a rate limit error
+                    if (data.type === 'rate_limit' || response.status === 429) {
+                        // Show rate limit message directly without "I encountered an issue" prefix
+                        addMessage("assistant", data.message || `Please wait ${data.retry_after} seconds before you can ask a question again.`)
+                    } else {
+                        // For other errors, show with prefix
+                        addMessage("assistant", `I encountered an issue: ${data.message}`)
+                    }
                 }
             } catch (error) {
                 addMessage("assistant", "I'm having trouble connecting to the server. Please ensure the backend is running.")
