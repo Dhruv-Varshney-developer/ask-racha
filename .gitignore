@@ -23,6 +23,9 @@ wheels/
 
 # Virtual Environment
 venv/
+*venv/
+venv312/
+*venv312/
 ENV/
 
 # IDE

@@ -1,3 +1,3 @@
-from .vector_store import VectorStore
+from .pinecone_vector_store import PineconeVectorStore
 
-__all__ = ["VectorStore"]
+__all__ = ["PineconeVectorStore"]

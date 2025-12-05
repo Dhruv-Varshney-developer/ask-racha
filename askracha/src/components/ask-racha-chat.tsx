@@ -28,6 +28,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
     status,
     isInitialized,
     checkStatus,
+    kbStatus,
   } = useSystemStatus();
   const { theme } = useTheme(); // Get the current theme
 
@@ -91,6 +92,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
           {messages.length === 0 ? (
             <WelcomeScreen
               status={status}
+              kbStatus={kbStatus}
               suggestions={suggestions}
               setInput={setInput}
             />
@@ -104,7 +106,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
           setInput={setInput}
           handleSubmit={handleSubmit}
           isLoading={isChatLoading}
-          canSubmit={!!status?.documents_loaded}
+          canSubmit={kbStatus?.status === "ready"}
           status={status}
         />
       </div>

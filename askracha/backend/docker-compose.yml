@@ -1,12 +1,4 @@
 services:
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: qdrant
-    volumes:
-      - qdrant_data:/qdrant/storage
-    environment:
-      - QDRANT_ALLOW_RECOVERY=true
-
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -27,17 +19,16 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - FLASK_ENV=${FLASK_ENV:-development}
-      - QDRANT_HOST=qdrant
-      - QDRANT_PORT=6333
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT:-us-east-1}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-askracha-docs}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - RATE_LIMIT_SECONDS=${RATE_LIMIT_SECONDS:-60}
     command: sh -lc "pip install -r requirements.txt && python -u app.py"
     depends_on:
-      - qdrant
       - redis
 
 volumes:
-  qdrant_data:
-  backend_index: 
+  backend_index:
   redis_data:

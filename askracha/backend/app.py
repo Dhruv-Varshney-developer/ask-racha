@@ -30,36 +30,69 @@ document_scheduler = None
 # Global context manager instance
 context_manager = ChatContextManager()
 
+# Knowledge base loading status
+kb_loading_status = {
+    "status": "not_started",  # not_started, loading, ready, error
+    "progress": 0,
+    "message": "Knowledge base not initialized",
+    "documents_loaded": 0
+}
+
 
 def load_default_documents():
     """Load default documentation on server startup"""
-    global rag, document_scheduler
+    global rag, document_scheduler, kb_loading_status
+    
+    kb_loading_status["status"] = "loading"
+    kb_loading_status["progress"] = 10
+    kb_loading_status["message"] = "Initializing RAG system..."
+    
     if not rag:
         try:
             rag = AskRachaRAG()
+            kb_loading_status["progress"] = 20
+            kb_loading_status["message"] = "RAG system initialized"
         except Exception as e:
             print(f"Failed to initialize RAG for default documents: {e}")
+            kb_loading_status["status"] = "error"
+            kb_loading_status["message"] = f"Failed to initialize: {str(e)}"
             return
 
     # Check if documents already exist in vector store
     try:
+        kb_loading_status["progress"] = 30
+        kb_loading_status["message"] = "Checking existing documents..."
+        
         stats = rag.vector_store.get_stats()
         if stats["success"] and stats["stats"].points_count > 0:
             print(
                 f"Vector store already contains {stats['stats'].points_count} documents, skipping default loading"
             )
+            kb_loading_status["progress"] = 90
+            kb_loading_status["message"] = "Loading existing index..."
+            kb_loading_status["documents_loaded"] = stats["stats"].points_count
+            
             # Ensure scheduler is started even if we skip loading
             if document_scheduler is None:
                 document_scheduler = DocumentUpdateScheduler(rag, context_manager, test_mode=False)
                 document_scheduler.start()
                 print("Document update scheduler started")
+            
+            kb_loading_status["status"] = "ready"
+            kb_loading_status["progress"] = 100
+            kb_loading_status["message"] = "Knowledge base ready"
             return
     except Exception as e:
         print(f"Could not check vector store stats: {e}")
 
     try:
+        kb_loading_status["progress"] = 40
+        kb_loading_status["message"] = "Processing GitHub repositories..."
         print("Processing GitHub repositories...")
         rag._process_github_repos() 
+        
+        kb_loading_status["progress"] = 60
+        kb_loading_status["message"] = "Loading documentation..."
         
         default_urls = [
             "https://docs.storacha.network/quickstart/",
@@ -69,6 +102,9 @@ def load_default_documents():
         result = rag.load_documents(default_urls)
         
         if result["success"]:
+            kb_loading_status["progress"] = 80
+            kb_loading_status["message"] = "Building search index..."
+            
             print(f"🧠 Creating comprehensive index from {len(rag.documents)} documents...")
             rag.index = VectorStoreIndex.from_documents(
                 rag.documents,
@@ -81,6 +117,10 @@ def load_default_documents():
                 verbose=True
             )
             
+            kb_loading_status["progress"] = 90
+            kb_loading_status["message"] = "Starting document scheduler..."
+            kb_loading_status["documents_loaded"] = len(rag.documents)
+            
             print(f"Successfully loaded default documents")
             print(rag.get_status())
             
@@ -89,10 +129,17 @@ def load_default_documents():
             document_scheduler.start()
             print("Document update scheduler started")
             
+            kb_loading_status["status"] = "ready"
+            kb_loading_status["progress"] = 100
+            kb_loading_status["message"] = "Knowledge base ready"
         else:
             print(f"Failed to load default documents: {result['message']}")
+            kb_loading_status["status"] = "error"
+            kb_loading_status["message"] = f"Failed to load documents: {result['message']}"
     except Exception as e:
         print(f"Error loading default documents: {e}")
+        kb_loading_status["status"] = "error"
+        kb_loading_status["message"] = f"Error: {str(e)}"
 
 
 @app.route('/api/health', methods=['GET'])
@@ -154,55 +201,11 @@ def initialize_rag():
             'message': f'Failed to initialize RAG system: {str(e)}'
         }), 500
 
-@app.route('/api/load-documents', methods=['POST'])
-def load_documents():
-    """Load documents into the RAG system"""
-    global rag
-
-    if not rag:
-        return jsonify({
-            'success': False,
-            'message': 'RAG system not initialized. Please initialize first.'
-        }), 400
-
-    data = request.get_json()
-    urls = data.get('urls', [])
-
-    if not urls:
-        return jsonify({
-            'success': False,
-            'message': 'No URLs provided'
-        }), 400
-
-    # Validate URLs
-    valid_urls = []
-    for url in urls:
-        url = url.strip()
-        if url and (url.startswith('http://') or url.startswith('https://')):
-            valid_urls.append(url)
-
-    if not valid_urls:
-        return jsonify({
-            'success': False,
-            'message': 'No valid URLs provided'
-        }), 400
-
-    try:
-        print(f"📄 Loading {len(valid_urls)} documents...")
-        result = rag.load_documents(valid_urls)
-
-        if result['success']:
-            print(f"✅ Successfully loaded {result['document_count']} documents")
-        else:
-            print(f"❌ Failed to load documents: {result['message']}")
-
-        return jsonify(result)
-    except Exception as e:
-        print(f"❌ Error loading documents: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'Error loading documents: {str(e)}'
-        }), 500
+@app.route('/api/kb-status', methods=['GET'])
+def get_kb_status():
+    """Get knowledge base loading status"""
+    global kb_loading_status
+    return jsonify(kb_loading_status)
     
 @app.route('/api/chat/session', methods=['POST'])
 def create_chat_session():
@@ -398,7 +401,7 @@ def list_documents():
 
 @app.route("/api/vector-store/stats", methods=["GET"])
 def get_vector_store_stats():
-    """Get detailed information about Qdrant vector store"""
+    """Get detailed information about Pinecone vector store"""
     global rag
 
     if not rag:
@@ -426,43 +429,38 @@ def get_vector_store_stats():
             )
         
         try:
-            from qdrant_client.http.models import ScrollRequest
+            # Get vectors from Pinecone
+            vectors = rag.vector_store.get_all_vectors(limit=1000)
 
-            points = rag.vector_store.client.scroll(
-                collection_name=rag.vector_store.collection_name,
-                limit=1000,
-                with_payload=True,
-            )[0]
-
-            points_info = []
-            for point in points:
-                point_info = {
-                    "id": point.id,
-                    "source": point.payload.get("source", "N/A"),
-                    "title": point.payload.get("title", "N/A"),
-                    "type": point.payload.get("type", "N/A"),
-                    "length": point.payload.get("length", "N/A"),
-                    "timestamp": point.payload.get("timestamp", "N/A"),
+            vectors_info = []
+            for vector_data in vectors:
+                metadata = vector_data.get('metadata', {})
+                vector_info = {
+                    "id": vector_data.get('id', 'N/A'),
+                    "source": metadata.get("source", "N/A"),
+                    "title": metadata.get("title", "N/A"),
+                    "type": metadata.get("type", "N/A"),
+                    "length": metadata.get("length", "N/A"),
+                    "timestamp": metadata.get("timestamp", "N/A"),
                     "text_preview": (
-                        point.payload.get("text", "")[:100] + "..."
-                        if len(point.payload.get("text", "")) > 100
-                        else point.payload.get("text", "")
+                        metadata.get("text", "")[:100] + "..."
+                        if len(metadata.get("text", "")) > 100
+                        else metadata.get("text", "")
                     ),
                 }
-                points_info.append(point_info)
+                vectors_info.append(vector_info)
 
             return jsonify(
                 {
                     "success": True,
-                    "collection_name": rag.vector_store.collection_name,
+                    "index_name": rag.vector_store.index_name,
                     "stats": {
                         "points_count": stats["stats"].points_count,
                         "vectors_count": stats["stats"].vectors_count,
                         "segments_count": stats["stats"].segments_count,
                         "status": stats["stats"].status,
                     },
-                    # "points": points_info,
-                    "total_points": len(points_info),
+                    "total_vectors": len(vectors_info),
                 }
             )
 
@@ -471,7 +469,7 @@ def get_vector_store_stats():
                 jsonify(
                     {
                         "success": False,
-                        "message": f"Failed to retrieve point details: {str(e)}",
+                        "message": f"Failed to retrieve vector details: {str(e)}",
                     }
                 ),
                 500,
@@ -490,7 +488,7 @@ def get_vector_store_stats():
 
 @app.route("/api/vector-store/clear", methods=["POST"])
 def clear_vector_store():
-    """Clear all documents from Qdrant vector store"""
+    """Clear all documents from Pinecone vector store"""
     if os.getenv('FLASK_ENV') == 'production':
         return jsonify({
             'success': False,
@@ -534,15 +532,15 @@ def clear_vector_store():
                 }
             )
 
-        rag.vector_store.client.delete_collection(rag.vector_store.collection_name)
-        rag.vector_store.initialize_index()
+        # Delete all vectors from Pinecone index
+        rag.vector_store.index.delete(delete_all=True)
 
         return jsonify(
             {
                 "success": True,
                 "message": f"Successfully cleared vector store",
                 "deleted_count": current_count,
-                "collection_recreated": True,
+                "index_cleared": True,
             }
         )
 
