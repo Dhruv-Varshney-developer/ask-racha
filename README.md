@@ -177,14 +177,46 @@ npm run start
 ## Project Structure
 
 ```
-askracha/
-├── backend/           # Python Flask backend
-│   ├── app.py        # Main Flask application
-│   ├── rag.py        # RAG implementation
-│   └── requirements.txt
-├── src/              # Frontend source code
-├── public/           # Static assets
-└── package.json      # Frontend dependencies and scripts
+ask-racha/
+├── askracha/                    # Main application directory
+│   ├── backend/                 # Python Flask backend
+│   │   ├── app.py              # Main Flask application
+│   │   ├── rag.py              # RAG implementation with Pinecone
+│   │   ├── chat_context.py     # Chat context management
+│   │   ├── document_scheduler.py # Document update scheduler
+│   │   ├── requirements.txt    # Python dependencies
+│   │   ├── storage/            # Vector store implementation
+│   │   │   ├── __init__.py
+│   │   │   └── pinecone_vector_store.py
+│   │   ├── rate_limit/         # Rate limiting module
+│   │   │   └── rate_limiter.py
+│   │   ├── repos/              # Documentation repositories
+│   │   │   └── setup-repos.sh # Script to clone docs
+│   │   └── .env.example        # Backend environment template
+│   │
+│   ├── bot/                    # Discord bot (optional)
+│   │   ├── bot.py             # Discord bot implementation
+│   │   ├── api_client.py      # API client for backend
+│   │   ├── config.py          # Bot configuration
+│   │   ├── requirements.txt   # Bot dependencies
+│   │   └── .env.example       # Bot environment template
+│   │
+│   ├── src/                   # Frontend source code
+│   │   ├── app/              # Next.js app directory
+│   │   ├── components/       # React components
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── types/            # TypeScript type definitions
+│   │   └── middleware.ts     # Next.js middleware
+│   │
+│   ├── package.json          # Frontend dependencies
+│   ├── next.config.ts        # Next.js configuration
+│   ├── tailwind.config.ts    # Tailwind CSS configuration
+│   ├── tsconfig.json         # TypeScript configuration
+│   └── .env.example          # Frontend environment template
+│
+├── README.md                 # This file
+├── LICENSE                   # Project license
+└── .gitignore               # Git ignore rules
 ```
 
 ## License
