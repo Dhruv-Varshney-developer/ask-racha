@@ -17,16 +17,7 @@ This is the backend API for AskRacha, built with Flask and powered by Google Gem
 pip install -r requirements.txt
 ```
 
-### 2. Clone Documentation Repositories
-
-Run the setup script to clone the required documentation repositories:
-
-```bash
-cd repos
-./setup-repos.sh
-```
-
-### 3. Configure Environment Variables
+### 2. Configure Environment Variables
 
 Create a `.env` file in the `backend` folder with the following configuration:
 
@@ -47,7 +38,7 @@ ALLOWED_ORIGINS=http://localhost:3000
 FLASK_ENV=development
 ```
 
-### 4. Run the Backend
+### 3. Run the Backend
 
 ```bash
 python app.py
