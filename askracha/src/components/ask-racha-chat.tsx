@@ -28,6 +28,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
     status,
     isInitialized,
     checkStatus,
+    kbStatus,
   } = useSystemStatus();
   const { theme } = useTheme(); // Get the current theme
 
@@ -37,7 +38,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
 
   const suggestions = [
     "What is Storacha and how does it work?",
-    "How do I get started with the w3up client?",
+    "How do I get started with the storacha client?",
     "What are the main concepts in Storacha?",
     "How do I upload files to Storacha?",
     "What are the pricing plans for Storacha?",
@@ -91,6 +92,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
           {messages.length === 0 ? (
             <WelcomeScreen
               status={status}
+              kbStatus={kbStatus}
               suggestions={suggestions}
               setInput={setInput}
             />
@@ -104,7 +106,7 @@ export function AskRachaChat({ initialSessionId }: AskRachaChatProps) {
           setInput={setInput}
           handleSubmit={handleSubmit}
           isLoading={isChatLoading}
-          canSubmit={!!status?.documents_loaded}
+          canSubmit={kbStatus?.status === "ready"}
           status={status}
         />
       </div>

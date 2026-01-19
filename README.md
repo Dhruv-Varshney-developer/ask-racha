@@ -13,6 +13,7 @@ A web application that provides an AI-powered interface to interact with Storach
 ## Tech Stack
 
 ### Frontend
+
 - Next.js 15.3.3
 - React 19
 - TypeScript
@@ -20,6 +21,7 @@ A web application that provides an AI-powered interface to interact with Storach
 - Lucide React (for icons)
 
 ### Backend
+
 - Python Flask
 - LlamaIndex
 - Google Gemini AI
@@ -30,22 +32,27 @@ A web application that provides an AI-powered interface to interact with Storach
 - Node.js (Latest LTS version)
 - Python 3.8+
 - Gemini API key
+- Pinecone account and API key
+- Redis instance (for rate limiting)
 
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/Dhruv-Varshney-developer/ask-racha.git
 cd ask-racha
 ```
 
 2. Install frontend dependencies:
+
 ```bash
 cd askracha
 npm install
 ```
 
 3. Install backend dependencies:
+
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -54,62 +61,78 @@ pip install -r requirements.txt
 4. Set up environment variables:
 
 For the frontend:
+
 ```bash
 cd askracha
 cp .env.example .env
 ```
 
 For the backend:
+
 ```bash
 cd askracha/backend
 cp .env.example .env
 ```
 
-Then edit both `.env` files and add your Gemini API key:
-```
-GEMINI_API_KEY=your_api_key_here
+Then edit the backend `.env` file and add your configuration:
 
+```env
+# Gemini AI Configuration
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Pinecone Configuration
+PINECONE_API_KEY=your_pinecone_api_key_here
+PINECONE_ENVIRONMENT=your_pinecone_environment
+PINECONE_INDEX_NAME=ask-racha
+
+# Redis Configuration (for rate limiting)
+REDIS_URL=your_redis_url_here
+# Example: redis://localhost:6379 for local development
+# Or use a cloud Redis service like Upstash, Redis Cloud, etc.
 ```
 
 ## Vector Store Setup
 
-### Local Development
+This application uses Pinecone as the vector database for storing and retrieving document embeddings.
 
-1. Make sure Docker is installed and running
-2. Start Qdrant:
+### Setting up Pinecone
 
-```bash
-cd askracha/backend/storage
-docker compose up -d
-```
+1. **Create a Pinecone Account:**
 
-3. Verify the setup:
+   - Go to [Pinecone.io](https://www.pinecone.io/) and sign up for a free account
+   - Navigate to the API Keys section in your dashboard
 
-```bash
-cd askracha/backend
-python -m unittest storage/tests/test_vector_store.py -v
-```
+2. **Get Your API Key:**
 
-### Environment Variables
+   - Copy your API key from the Pinecone dashboard
+   - Note your environment (e.g., `us-east-1-aws`, `gcp-starter`)
 
-For local development:
+3. **Configure Environment Variables:**
 
-- No additional env vars needed, uses Qdrant Local by default
-- Qdrant runs on port 6343 (configurable via QDRANT_PORT)
-
-For production:
+Add the following to your backend `.env` file:
 
 ```env
-QDRANT_HOST=your_qdrant_host
-QDRANT_PORT=6333
-QDRANT_API_KEY=your_api_key
+PINECONE_API_KEY=your_pinecone_api_key_here
+PINECONE_ENVIRONMENT=your_pinecone_environment
+PINECONE_INDEX_NAME=ask-racha
 ```
+
+### Index Configuration
+
+The application automatically creates and configures the Pinecone index on startup with the following settings:
+
+- **Dimension:** 768 (matches the embedding model)
+- **Metric:** Cosine similarity
+- **Index Name:** `ask-racha` (configurable via `PINECONE_INDEX_NAME`)
+
+The knowledge base is loaded automatically when the backend starts, so there's no need for manual indexing.
 
 ## Running the Application
 
 ### Development Mode
 
 To run both frontend and backend concurrently:
+
 ```bash
 npm run dev:full
 ```
@@ -117,11 +140,13 @@ npm run dev:full
 Or run them separately:
 
 Frontend:
+
 ```bash
 npm run dev
 ```
 
 Backend:
+
 ```bash
 npm run backend
 ```
@@ -129,11 +154,13 @@ npm run backend
 ### Production Build
 
 1. Build the frontend:
+
 ```bash
 npm run build
 ```
 
 2. Start the production server:
+
 ```bash
 npm run start
 ```
@@ -150,14 +177,46 @@ npm run start
 ## Project Structure
 
 ```
-askracha/
-├── backend/           # Python Flask backend
-│   ├── app.py        # Main Flask application
-│   ├── rag.py        # RAG implementation
-│   └── requirements.txt
-├── src/              # Frontend source code
-├── public/           # Static assets
-└── package.json      # Frontend dependencies and scripts
+ask-racha/
+├── askracha/                    # Main application directory
+│   ├── backend/                 # Python Flask backend
+│   │   ├── app.py              # Main Flask application
+│   │   ├── rag.py              # RAG implementation with Pinecone
+│   │   ├── chat_context.py     # Chat context management
+│   │   ├── document_scheduler.py # Document update scheduler
+│   │   ├── requirements.txt    # Python dependencies
+│   │   ├── storage/            # Vector store implementation
+│   │   │   ├── __init__.py
+│   │   │   └── pinecone_vector_store.py
+│   │   ├── rate_limit/         # Rate limiting module
+│   │   │   └── rate_limiter.py
+│   │   ├── repos/              # Documentation repositories
+│   │   │   └── setup-repos.sh # Script to clone docs
+│   │   └── .env.example        # Backend environment template
+│   │
+│   ├── bot/                    # Discord bot (optional)
+│   │   ├── bot.py             # Discord bot implementation
+│   │   ├── api_client.py      # API client for backend
+│   │   ├── config.py          # Bot configuration
+│   │   ├── requirements.txt   # Bot dependencies
+│   │   └── .env.example       # Bot environment template
+│   │
+│   ├── src/                   # Frontend source code
+│   │   ├── app/              # Next.js app directory
+│   │   ├── components/       # React components
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── types/            # TypeScript type definitions
+│   │   └── middleware.ts     # Next.js middleware
+│   │
+│   ├── package.json          # Frontend dependencies
+│   ├── next.config.ts        # Next.js configuration
+│   ├── tailwind.config.ts    # Tailwind CSS configuration
+│   ├── tsconfig.json         # TypeScript configuration
+│   └── .env.example          # Frontend environment template
+│
+├── README.md                 # This file
+├── LICENSE                   # Project license
+└── .gitignore               # Git ignore rules
 ```
 
 ## License

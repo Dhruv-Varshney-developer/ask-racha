@@ -71,7 +71,7 @@ class RateLimitMiddleware:
         """Create JSON response for rate limit violations."""
         response_data = {
             'error': 'Rate limit exceeded',
-            'message': f'Please wait {result.remaining_seconds} seconds before asking another question',
+            'message': f'Please wait {result.remaining_seconds} seconds before you can ask a question again.',
             'retry_after': result.remaining_seconds,
             'reset_time': result.reset_time.isoformat(),
             'type': 'rate_limit'
@@ -174,7 +174,7 @@ def rate_limit_required(f: Callable) -> Callable:
                 logger.info(f"Rate limit exceeded for user {user_id}, {result.remaining_seconds}s remaining")
                 response_data = {
                     'error': 'Rate limit exceeded',
-                    'message': f'Please wait {result.remaining_seconds} seconds before asking another question',
+                    'message': f'Please wait {result.remaining_seconds} seconds before you can ask a question again.',
                     'retry_after': result.remaining_seconds,
                     'reset_time': result.reset_time.isoformat(),
                     'type': 'rate_limit'

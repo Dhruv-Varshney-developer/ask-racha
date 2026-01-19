@@ -22,7 +22,7 @@ from llama_index.readers.web import SimpleWebPageReader, SitemapReader
 import requests
 from bs4 import BeautifulSoup
 
-from storage.vector_store import VectorStore
+from storage.pinecone_vector_store import PineconeVectorStore
 from cleaning.processors import RepoProcessor
 
 load_dotenv()
@@ -51,7 +51,7 @@ class AskRachaRAG:
             api_key=self.gemini_api_key
         )
 
-        self.vector_store = VectorStore(is_local=True)
+        self.vector_store = PineconeVectorStore()
 
         self.index = None
         self.query_engine = None
@@ -106,31 +106,28 @@ class AskRachaRAG:
         try:
             print("Loading existing documents from vector store...")
             
-            all_points = self.vector_store.client.scroll(
-                collection_name=self.vector_store.collection_name,
-                limit=1000,
-                with_payload=True
-            )[0]
+            # Use Pinecone's get_all_vectors method
+            all_vectors = self.vector_store.get_all_vectors(limit=1000)
             
-            if all_points:
-                print(f"Found {len(all_points)} points in vector store")
+            if all_vectors:
+                print(f"Found {len(all_vectors)} vectors in Pinecone")
 
-                for point in all_points:
-                    if hasattr(point, 'payload') and point.payload:
-                        text = point.payload.get('text', '')
-                        
-                        metadata = {}
-                        if 'source' in point.payload:
-                            metadata['source'] = point.payload['source']
-                        if 'title' in point.payload:
-                            metadata['title'] = point.payload['title']
-                        if 'type' in point.payload:
-                            metadata['type'] = point.payload['type']
-                        if 'length' in point.payload:
-                            metadata['length'] = point.payload['length']
-                        
-                        doc = Document(text=text, metadata=metadata)
-                        self.documents.append(doc)
+                for vector_data in all_vectors:
+                    metadata = vector_data.get('metadata', {})
+                    text = metadata.get('text', '')
+                    
+                    doc_metadata = {}
+                    if 'source' in metadata:
+                        doc_metadata['source'] = metadata['source']
+                    if 'title' in metadata:
+                        doc_metadata['title'] = metadata['title']
+                    if 'type' in metadata:
+                        doc_metadata['type'] = metadata['type']
+                    if 'length' in metadata:
+                        doc_metadata['length'] = metadata['length']
+                    
+                    doc = Document(text=text, metadata=doc_metadata)
+                    self.documents.append(doc)
                 
                 print(f"Loaded {len(self.documents)} documents into memory")
                 

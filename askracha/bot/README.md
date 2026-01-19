@@ -22,16 +22,19 @@ This Discord bot integrates with the AskRacha RAG API to provide automated suppo
 ### Installation
 
 1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. Copy the environment configuration:
+
 ```bash
 cp .env.example .env
 ```
 
 3. Edit `.env` file with your configuration:
+
 ```bash
 # Required
 DISCORD_TOKEN=your_discord_bot_token_here
@@ -55,15 +58,15 @@ python main.py
 
 All configuration is managed through environment variables:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DISCORD_TOKEN` | Yes | - | Discord bot token |
-| `ASKRACHA_API_URL` | No | `http://localhost:5000` | AskRacha API base URL |
-| `API_TIMEOUT` | No | `10` | API request timeout (seconds) |
-| `MAX_RESPONSE_LENGTH` | No | `2000` | Max Discord message length |
-| `LOG_LEVEL` | No | `INFO` | Logging level |
-| `RETRY_ATTEMPTS` | No | `3` | API retry attempts |
-| `RETRY_DELAY` | No | `1.0` | Delay between retries (seconds) |
+| Variable              | Required | Default                 | Description                     |
+| --------------------- | -------- | ----------------------- | ------------------------------- |
+| `DISCORD_TOKEN`       | Yes      | -                       | Discord bot token               |
+| `ASKRACHA_API_URL`    | No       | `http://localhost:5000` | AskRacha API base URL           |
+| `API_TIMEOUT`         | No       | `10`                    | API request timeout (seconds)   |
+| `MAX_RESPONSE_LENGTH` | No       | `2000`                  | Max Discord message length      |
+| `LOG_LEVEL`           | No       | `INFO`                  | Logging level                   |
+| `RETRY_ATTEMPTS`      | No       | `3`                     | API retry attempts              |
+| `RETRY_DELAY`         | No       | `1.0`                   | Delay between retries (seconds) |
 
 ## Usage
 
@@ -79,23 +82,11 @@ The bot creates structured JSON logs in the `logs/` directory:
 - `error.log` - Error-level events only
 
 Logs include:
+
 - Bot lifecycle events (startup, shutdown, reconnection)
 - Message processing (questions, responses, timing)
 - API communication (requests, responses, errors)
 - Performance metrics
-
-## Development Status
-
-This bot is currently under development. Implementation progress:
-
-- [x] Task 1: Project structure and configuration ✅
-- [ ] Task 2: API client implementation
-- [ ] Task 3: Message processing system
-- [ ] Task 4: Discord bot functionality
-- [ ] Task 5: Resilience and monitoring
-- [ ] Task 6: Deployment files
-- [ ] Task 7: Testing suite
-- [ ] Task 8: Production readiness
 
 ## Architecture
 

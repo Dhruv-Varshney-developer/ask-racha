@@ -112,7 +112,7 @@ class MessageProcessor:
         if not answer:
             logger.warning("API response missing answer content")
             return "I couldn't find a good answer to your question. Could you try rephrasing it? 🤔"
-                    
+        
         # Truncate if necessary
         formatted_response = self.truncate_response(answer)
         

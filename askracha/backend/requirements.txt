@@ -9,7 +9,7 @@ python-dotenv
 requests
 beautifulsoup4
 lxml
-qdrant-client>=1.7.0
+pinecone>=3.0.0
 pytest>=7.0.0
 APScheduler>=3.10.0
 tiktoken

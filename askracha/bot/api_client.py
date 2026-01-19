@@ -158,7 +158,7 @@ class APIClient:
         try:
             logger.info(f"Querying RAG API with question: {question[:100]}...")
             
-            request_data = {"query": question.strip()}
+            request_data = {"question": question.strip()}
             response_data = await self._make_request("/api/query", request_data)
             
             response_time = time.time() - start_time
@@ -314,9 +314,9 @@ class APIClient:
         try:
             logger.debug("Performing API health check")
             
-            # Use a simple test query for health check (backend expects 'query')
+            # Use a simple test query for health check (backend expects 'question')
             test_question = "health check"
-            request_data = {"query": test_question}
+            request_data = {"question": test_question}
             
             # Use shorter timeout for health check
             health_check_timeout = min(5, self.timeout)
